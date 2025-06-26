@@ -40,15 +40,16 @@ test_job:
   stage: test # Gehört zur 'test'-Phase
   script: | # Das Pipe-Symbol '|' bleibt hier korrekt
     echo "Running tests..."
-    # Aktualisiere Paketlisten und installiere xvfb und Chromium
-    apk update && apk add --no-cache xvfb chromium
+    # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten für Chrome/ChromeDriver
+    # Die --no-cache Option ist gut, um immer frische Pakete zu bekommen.
+    apk update && apk add --no-cache xvfb chromium nss freetype-libs fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl libglib2 udev dbus-libs
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
     sleep 5 
 
     # Finde den tatsächlichen Pfad des Xvfb-Binaries (nicht xvfb-run)
     # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
-    X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -print -quit) || true
+    X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -type f -print -quit) || true
     
     # Fallback, falls 'find' nichts findet (sollte nach Installation von xvfb nicht passieren)
     if [ -z "$X_VFB_BINARY" ]; then echo "Error: Xvfb binary not found after installation!"; exit 1; fi
@@ -64,6 +65,14 @@ test_job:
     
     # Warte kurz, bis der X-Server gestartet ist
     sleep 3 
+
+    # --- ZUSÄTZLICHER SCHRITT: Berechtigungen für ChromeDriver setzen ---
+    # WebDriverManager lädt den Treiber nach /root/.cache/selenium/...
+    # Wir müssen ihn ausführbar machen, da er sonst nicht "gerunnt" werden kann.
+    # Der `find` Befehl sucht den chromedriver nach dem Download durch WebDriverManager.
+    CHROMEDRIVER_PATH=$(find /root/.cache/selenium -name "chromedriver" -type f -print -quit)
+    if [ -z "$CHROMEDRIVER_PATH" ]; then echo "Error: Chromedriver not found by find command!"; else chmod +x "$CHROMEDRIVER_PATH"; fi
+    # --- ENDE ZUSÄTZLICHER SCHRITT ---
 
     # Führe Tests mit Maven aus
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
