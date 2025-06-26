@@ -38,11 +38,14 @@ build_job:
 
 test_job:
   stage: test # Gehört zur 'test'-Phase
+  # --- WICHTIGE ÄNDERUNG HIER: Variablen für diesen Job deklarieren ---
+  variables:
+    CHROMEDRIVER_VERSION: "124.0.6367.91" # Festlegen der ChromeDriver Version
+    CHROMEDRIVER_URL: "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/124.0.6367.91/linux64/chromedriver-linux64.zip"
+  # --- ENDE WICHTIGER ÄNDERUNG ---
   script: | # Das Pipe-Symbol '|' bleibt hier korrekt
     echo "Running tests..."
-    # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten für Chrome/ChromeDriver
-    # sowie wget und unzip für den Download und das Entpacken des Chromedrivers
-    # NEU: Hinzugefügt: libstdc++
+    # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten
     apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs wget unzip libstdc++
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
@@ -68,16 +71,8 @@ test_job:
     sleep 3 
 
     # --- ChromeDriver manuell herunterladen und konfigurieren ---
-    # Definiere die ChromeDriver Version direkt hier, um sicherzustellen, dass die Zuweisung funktioniert
-    # Diese Version muss zur installierten Chromium-Version passen.
-    # Die installierte Chromium-Version ist 124.0.6367.78 (siehe vorherige Logs).
-    # Eine passende ChromeDriver-Version für 124.x ist 124.0.6367.91 (oder ähnlich).
-    CHROMEDRIVER_VERSION="124.0.6367.91" 
-
-    # Erstelle die URL direkt hier mit der definierten Version
-    CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
-    
-    echo "Downloading ChromeDriver version ${CHROMEDR_VERSION} from: ${CHROMEDR_URL}"
+    # Die Variablen sind jetzt als Job-Variablen verfügbar und müssen nicht mehr im Script neu definiert werden
+    echo "Downloading ChromeDriver version ${CHROMEDRIVER_VERSION} from: ${CHROMEDR_URL}"
     wget -q --show-progress "${CHROMEDR_URL}" -O /tmp/chromedriver.zip
 
     # Entpacke den ChromeDriver
