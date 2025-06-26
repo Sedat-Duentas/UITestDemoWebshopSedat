@@ -41,14 +41,13 @@ test_job:
   script: | # Das Pipe-Symbol '|' bleibt hier korrekt
     echo "Running tests..."
     # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten für Chrome/ChromeDriver
-    # Die --no-cache Option ist gut, um immer frische Pakete zu bekommen.
-    # Korrigierte Paketnamen für Alpine Linux: freetype anstatt freetype-libs, glib anstatt libglib2
-    apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs
+    # sowie wget und unzip für den Download und das Entpacken des Chromedrivers
+    apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs wget unzip
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
     sleep 5 
 
-    # Finde den tatsächlichen Pfad des Xvfb-Binaries (nicht xvfb-run)
+    # Finde den tatsächlichen Pfad des Xvfb-Binaries
     # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
     X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -type f -print -quit) || true
     
@@ -67,16 +66,34 @@ test_job:
     # Warte kurz, bis der X-Server gestartet ist
     sleep 3 
 
-    # --- ZUSÄTZLICHER SCHRITT: Berechtigungen für ChromeDriver setzen ---
-    # WebDriverManager lädt den Treiber nach /root/.cache/selenium/...
-    # Wir müssen ihn ausführbar machen, da er sonst nicht "gerunnt" werden kann.
-    # Der `find` Befehl sucht den chromedriver nach dem Download durch WebDriverManager.
-    CHROMEDRIVER_PATH=$(find /root/.cache/selenium -name "chromedriver" -type f -print -quit)
-    if [ -z "$CHROMEDRIVER_PATH" ]; then echo "Error: Chromedriver not found by find command!"; else chmod +x "$CHROMEDRIVER_PATH"; fi
-    # --- ENDE ZUSÄTZLICHER SCHRITT ---
+    # --- WICHTIGE ÄNDERUNGEN HIER: ChromeDriver manuell herunterladen und konfigurieren ---
+    # Feste ChromeDriver-Version, basierend auf dem Log der vorherigen Fehler (138.0.7204.49)
+    # Diese Version muss zur installierten Chromium-Version passen, die von apk installiert wird.
+    # Hinweis: WebDriverManager lädt normalerweise die exakt passende Version. Hier umgehen wir WDM,
+    # daher muss die Version hier exakt passen, sonst kann es zu Kompatibilitätsproblemen kommen.
+    # Die installierte Chromium-Version ist 124.0.6367.78 (siehe Log Zeile 183).
+    # Wir versuchen es mit einer passenden ChromeDriver-Version für 124.x
+    CHROMEDRIVER_VERSION="124.0.6367.91" # Eine häufig passende Version für Chromium 124
 
-    # Führe Tests mit Maven aus
-    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+    CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip"
+    
+    echo "Downloading ChromeDriver version $CHROMEDRIVER_VERSION from: $CHROMEDR_URL"
+    wget -q --show-progress "$CHROMEDR_URL" -O /tmp/chromedriver.zip
+
+    # Entpacke den ChromeDriver
+    unzip /tmp/chromedriver.zip -d /tmp/chromedriver_extracted
+    # Der eigentliche chromedriver ist oft in einem Unterordner nach dem Entpacken
+    mv /tmp/chromedriver_extracted/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+
+    # Mach den ChromeDriver ausführbar
+    chmod +x /usr/local/bin/chromedriver
+
+    # Setze die System Property für Selenium, damit es den manuell installierten Treiber nutzt
+    export JAVA_OPTS="-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver"
+    # --- ENDE WICHTIGER ÄNDERUNGEN ---
+
+    # Führe Tests mit Maven aus (verwende JAVA_OPTS, das den Treiber-Pfad setzt)
+    mvn $MAVEN_CLI_OPTS $JAVA_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
       - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
