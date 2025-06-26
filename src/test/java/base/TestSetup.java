@@ -32,6 +32,9 @@ public class TestSetup {
         options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
         options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
 
+        // Füge den Pfad zum Chromium-Binary hinzu, das in der CI-Umgebung installiert wurde
+        options.setBinary("/usr/bin/chromium"); // Oder "/usr/bin/chromium-browser" falls das der Pfad ist
+
         driver = new ChromeDriver(options); // Browserinstanz starten
         driver.manage().window().maximize(); // Fenster maximieren
         driver.get(BASE_URL); // Zielseite (URL) laden
