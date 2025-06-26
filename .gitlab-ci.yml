@@ -30,9 +30,11 @@ test_job:
   stage: test
   script:
     - echo "Running tests..."
-    # Installiere X Virtual Framebuffer und Chromium (alternative zu Chrome)
     - apk update && apk add --no-cache xvfb chromium
-    - xvfb-run --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+    - sleep 5 # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
+    - XVFB_RUN_CMD=$(which xvfb-run) || true
+    - if [ -z "$XVFB_RUN_CMD" ]; then XVFB_RUN_CMD="/usr/bin/xvfb-run"; fi
+    - $XVFB_RUN_CMD --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
       - target/allure-results
