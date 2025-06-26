@@ -1,0 +1,64 @@
+# .gitlab-ci.yml
+image: maven:3.9.6-eclipse-temurin-21-alpine
+
+stages:
+  - build
+  - test
+  - report
+  - deploy_report
+
+variables:
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+
+cache:
+  paths:
+    - .m2/repository
+
+build_job:
+  stage: build
+  script:
+    - echo "Building the project..."
+    - mvn $MAVEN_CLI_OPTS compile
+  artifacts:
+    paths:
+      - target/classes
+      - target/test-classes
+    expire_in: 1 hour
+
+test_job:
+  stage: test
+  script:
+    - echo "Running tests..."
+    # Installiere X Virtual Framebuffer und Chromium (alternative zu Chrome)
+    - apk update && apk add --no-cache xvfb chromium
+    - xvfb-run --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+  artifacts:
+    paths:
+      - target/allure-results
+    expire_in: 1 day
+
+generate_allure_report_job:
+  stage: report
+  image: franklinz/allure:latest
+  needs: ["test_job"]
+  script:
+    - echo "Generating Allure report..."
+    - allure generate --clean target/allure-results -o target/allure-report
+  artifacts:
+    paths:
+      - target/allure-report
+    expire_in: 1 week
+
+pages:
+  stage: deploy_report
+  needs: ["generate_allure_report_job"]
+  script:
+    - echo "Deploying Allure report to GitLab Pages..."
+    - mv target/allure-report/ public
+  artifacts:
+    paths:
+      - public
+  only:
+    - master
+    - main
