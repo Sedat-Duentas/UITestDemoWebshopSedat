@@ -38,7 +38,7 @@ build_job:
 
 test_job:
   stage: test # Gehört zur 'test'-Phase
-  script: | # HIER IST DIE WICHTIGE ÄNDERUNG: Das Pipe-Symbol '|'
+  script: | # Das Pipe-Symbol '|' bleibt hier korrekt
     echo "Running tests..."
     # Aktualisiere Paketlisten und installiere xvfb und Chromium
     apk update && apk add --no-cache xvfb chromium
@@ -47,7 +47,9 @@ test_job:
     sleep 5 
 
     # Finde den tatsächlichen Pfad von xvfb-run dynamisch nach der Installation
-    XVFB_RUN_CMD=$(find /usr/bin /usr/local/bin -name "xvfb-run" -print -quit) || true
+    # Dies ist robuster, da der Pfad je nach Docker-Image variieren kann.
+    # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
+    XVFB_RUN_CMD=$(find /usr -maxdepth 3 -name "xvfb-run" -print -quit) || true
     
     # Fallback, falls 'find' nichts findet (sehr unwahrscheinlich nach Installation, aber zur Sicherheit)
     if [ -z "$XVFB_RUN_CMD" ]; then echo "Error: xvfb-run not found after installation!"; exit 1; fi
