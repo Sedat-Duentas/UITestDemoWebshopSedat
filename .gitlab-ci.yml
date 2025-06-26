@@ -1,81 +1,132 @@
+# .gitlab-ci.yml
+
+# Definiert das Docker-Image, das für alle Jobs in dieser Pipeline verwendet wird.
+# Wir wählen ein Maven-Image mit Java 21 und Alpine Linux (sehr schlank).
+image: maven:3.9.6-eclipse-temurin-21-alpine
+
+# Definiert die verschiedenen Phasen (Stages) unserer Pipeline.
+# Jobs in späteren Stages laufen nur, wenn alle Jobs in früheren Stages erfolgreich waren.
 stages:
   - build
   - test
-  - deploy
+  - report
+  - deploy_report # Für GitLab Pages Hosting des Allure Reports
 
+# Definition von Umgebungsvariablen, die in den Jobs verwendet werden können.
+# MAVEN_OPTS: Konfiguriert Maven für schnellere Builds (lokaler Repository-Pfad, reduzierte Logs).
+# MAVEN_CLI_OPTS: Standard-Optionen für Maven-Befehle.
 variables:
-  MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
 
+# Definiert einen Cache für Maven-Abhängigkeiten.
+# Dadurch müssen Abhängigkeiten nicht bei jedem Pipeline-Lauf neu heruntergeladen werden.
 cache:
   paths:
-    - .m2/repository
-  key: "$CI_COMMIT_REF_SLUG"
+    - .m2/repository # Der Pfad zum lokalen Maven-Repository im Docker-Container
 
 build_job:
-  stage: build
-  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende ein Alpine-Image für Maven
-  script:
-    - echo "Building the project..."
-    - mvn $MAVEN_CLI_OPTS compile
-  artifacts:
+  stage: build # Gehört zur 'build'-Phase
+  script: # Die Befehle, die ausgeführt werden sollen
+    - echo "Building the project..." # Einfache Log-Ausgabe
+    - mvn $MAVEN_CLI_OPTS compile # Kompiliert das Projekt
+  artifacts: # Was dieser Job als "Ergebnis" für nachfolgende Jobs speichert
     paths:
-      - target/*.jar # Sammle das erstellte JAR-Artefakt
-    expire_in: 1 week
+      - target/classes # Kompilierte Anwendungs-Klassen
+      - target/test-classes # Kompilierte Test-Klassen
+    expire_in: 1 hour # Wie lange diese Artefakte gespeichert bleiben sollen
 
 test_job:
-  stage: test
-  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende ein Alpine-Image für Maven
-  script:
-    - echo "Running tests..."
-    # Aktualisiere Paketlisten und installiere xvfb, Chromium, ALLE Abhängigkeiten UND die fehlende C++-Standardbibliothek
-    # Hinzugefügt: libstdc++
-    - apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs wget unzip libstdc++
+  stage: test # Gehört zur 'test'-Phase
+  script: | # Das Pipe-Symbol '|' bleibt hier korrekt
+    echo "Running tests..."
+    # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten für Chrome/ChromeDriver
+    # sowie wget und unzip für den Download und das Entpacken des Chromedrivers
+    # NEU: Hinzugefügt: libstdc++
+    apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs wget unzip libstdc++
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
-    - sleep 5 
+    sleep 5 
 
     # Finde den tatsächlichen Pfad des Xvfb-Binaries
-    - X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -type f -print -quit) || true
+    # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
+    X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -type f -print -quit) || true
     
-    # Fallback, falls 'find' nichts findet
-    - if [ -z "$X_VFB_BINARY" ]; then echo "Error: Xvfb binary not found after installation!"; exit 1; fi
+    # Fallback, falls 'find' nichts findet (sollte nach Installation von xvfb nicht passieren)
+    if [ -z "$X_VFB_BINARY" ]; then echo "Error: Xvfb binary not found after installation!"; exit 1; fi
 
     # Startet Xvfb im Hintergrund auf Display :99
-    - "$X_VFB_BINARY" :99 -screen 0 1280x1024x24 -ac &
-    - export DISPLAY=:99
-    - sleep 3 
-
-    # ChromeDriver manuell herunterladen und konfigurieren
-    - CHROMEDRIVER_VERSION="124.0.6367.91" 
-    - CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+    # '--screen 0 1280x1024x24' setzt die Bildschirmauflösung und Farbtiefe.
+    # '-ac' deaktiviert Zugriffskontrolle, was in CI-Umgebungen meist unbedenklich ist.
+    # '&': Führt den Befehl im Hintergrund aus.
+    "$X_VFB_BINARY" :99 -screen 0 1280x1024x24 -ac &
     
-    - echo "Downloading ChromeDriver version ${CHROMEDR_VERSION} from: ${CHROMEDR_URL}"
-    - wget -q --show-progress "${CHROMEDR_URL}" -O /tmp/chromedriver.zip
+    # Exportiere DISPLAY Variable, damit Selenium weiß, welchen X-Server es nutzen soll
+    export DISPLAY=:99
+    
+    # Warte kurz, bis der X-Server gestartet ist
+    sleep 3 
+
+    # --- ChromeDriver manuell herunterladen und konfigurieren ---
+    # Definiere die ChromeDriver Version direkt hier, um sicherzustellen, dass die Zuweisung funktioniert
+    # Diese Version muss zur installierten Chromium-Version passen.
+    # Die installierte Chromium-Version ist 124.0.6367.78 (siehe vorherige Logs).
+    # Eine passende ChromeDriver-Version für 124.x ist 124.0.6367.91 (oder ähnlich).
+    CHROMEDRIVER_VERSION="124.0.6367.91" 
+
+    # Erstelle die URL direkt hier mit der definierten Version
+    CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
+    
+    echo "Downloading ChromeDriver version ${CHROMEDR_VERSION} from: ${CHROMEDR_URL}"
+    wget -q --show-progress "${CHROMEDR_URL}" -O /tmp/chromedriver.zip
 
     # Entpacke den ChromeDriver
-    - unzip /tmp/chromedriver.zip -d /tmp/chromedriver_extracted
-    - mv /tmp/chromedriver_extracted/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
+    unzip /tmp/chromedriver.zip -d /tmp/chromedriver_extracted
+    # Der eigentliche chromedriver ist oft in einem Unterordner nach dem Entpacken
+    mv /tmp/chromedriver_extracted/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
 
     # Mach den ChromeDriver ausführbar
-    - chmod +x /usr/local/bin/chromedriver
+    chmod +x /usr/local/bin/chromedriver
 
     # Setze die System Property für Selenium, damit es den manuell installierten Treiber nutzt
-    - export JAVA_OPTS="-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver"
+    export JAVA_OPTS="-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver"
+    # --- ENDE ChromeDriver Installation ---
 
     # Führe Tests mit Maven aus (verwende JAVA_OPTS, das den Treiber-Pfad setzt)
-    - mvn $MAVEN_CLI_OPTS $JAVA_OPTS test -Dsurefire.useFile=false
+    mvn $MAVEN_CLI_OPTS $JAVA_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
       - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
     expire_in: 1 day # Behalte diese Ergebnisse für 1 Tag.
 
-deploy_job:
-  stage: deploy
-  image: alpine/git # Ein einfaches Image mit Git
+generate_allure_report_job:
+  stage: report # Gehört zur 'report'-Phase
+  image: franklinz/allure:latest # Ein schlankes Docker-Image, das die Allure CLI enthält.
+  needs: ["test_job"] # Stellt sicher, dass dieser Job erst nach dem erfolgreichen 'test_job' läuft
   script:
-    - echo "Deploying the application..."
-    # Hier würden deine Deployment-Schritte stehen.
-    # Dies ist ein Platzhalter und muss an deine tatsächliche Deployment-Strategie angepasst werden.
-    - echo "Deployment complete (placeholder)."
-  when: manual
+    - echo "Generating Allure report..."
+    # allure generate: Generiert den HTML-Report.
+    # --clean: Löscht vorherige Report-Dateien.
+    # target/allure-results: Das Eingabeverzeichnis mit den Allure-Ergebnissen (aus dem 'test_job' Artefakt).
+    # -o target/allure-report: Das Ausgabeverzeichnis für den generierten HTML-Report.
+    - allure generate --clean target/allure-results -o target/allure-report
+  artifacts:
+    paths:
+      - target/allure-report # Speichert den generierten HTML-Report
+    expire_in: 1 week # Behalte den Report für 1 Woche
+
+pages:
+  stage: deploy_report # Gehört zur 'deploy_report'-Phase
+  needs: ["generate_allure_report_job"] # Stellt sicher, dass der Report generiert wurde
+  script:
+    - echo "Deploying Allure report to GitLab Pages..."
+    # GitLab Pages erwartet die Dateien, die gehostet werden sollen, im Verzeichnis 'public'.
+    - mv target/allure-report/ public # Verschiebe den generierten Report in das 'public'-Verzeichnis
+  artifacts:
+    paths:
+      - public # GitLab Pages wird dieses Verzeichnis hosten
+  # Dieser Job soll nur auf dem Haupt-Branch (z.B. 'master' oder 'main') ausgeführt werden.
+  # Dies verhindert, dass für jeden Feature-Branch ein Pages-Deployment erstellt wird.
+  only:
+    - master
+    - main
