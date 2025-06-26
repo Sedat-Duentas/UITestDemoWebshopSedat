@@ -38,25 +38,22 @@ build_job:
 
 test_job:
   stage: test # Gehört zur 'test'-Phase
-  script:
-    - echo "Running tests..."
+  script: | # HIER IST DIE WICHTIGE ÄNDERUNG: Das Pipe-Symbol '|'
+    echo "Running tests..."
     # Aktualisiere Paketlisten und installiere xvfb und Chromium
-    - apk update && apk add --no-cache xvfb chromium
+    apk update && apk add --no-cache xvfb chromium
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
-    - sleep 5 
+    sleep 5 
 
     # Finde den tatsächlichen Pfad von xvfb-run dynamisch nach der Installation
-    # Dies ist robuster, da der Pfad je nach Docker-Image variieren kann.
-    # Wir suchen in /usr/bin und /usr/local/bin, den üblichen Orten.
-    # Das Kommando 'find' kann etwas langsamer sein, aber es ist zuverlässig.
-    - XVFB_RUN_CMD=$(find /usr/bin /usr/local/bin -name "xvfb-run" -print -quit) || true
+    XVFB_RUN_CMD=$(find /usr/bin /usr/local/bin -name "xvfb-run" -print -quit) || true
     
     # Fallback, falls 'find' nichts findet (sehr unwahrscheinlich nach Installation, aber zur Sicherheit)
-    - if [ -z "$XVFB_RUN_CMD" ]; then echo "Error: xvfb-run not found after installation!"; exit 1; fi
+    if [ -z "$XVFB_RUN_CMD" ]; then echo "Error: xvfb-run not found after installation!"; exit 1; fi
 
     # Führe Tests mit Maven aus, unter Verwendung des ermittelten xvfb-run Befehls
-    - $XVFB_RUN_CMD --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+    $XVFB_RUN_CMD --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
       - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
