@@ -1,66 +1,95 @@
 # .gitlab-ci.yml
+
+# Definiert das Docker-Image, das für alle Jobs in dieser Pipeline verwendet wird.
+# Wir wählen ein Maven-Image mit Java 21 und Alpine Linux (sehr schlank).
 image: maven:3.9.6-eclipse-temurin-21-alpine
 
+# Definiert die verschiedenen Phasen (Stages) unserer Pipeline.
+# Jobs in späteren Stages laufen nur, wenn alle Jobs in früheren Stages erfolgreich waren.
 stages:
   - build
   - test
   - report
-  - deploy_report
+  - deploy_report # Für GitLab Pages Hosting des Allure Reports
 
+# Definition von Umgebungsvariablen, die in den Jobs verwendet werden können.
+# MAVEN_OPTS: Konfiguriert Maven für schnellere Builds (lokaler Repository-Pfad, reduzierte Logs).
+# MAVEN_CLI_OPTS: Standard-Optionen für Maven-Befehle.
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
   MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
 
+# Definiert einen Cache für Maven-Abhängigkeiten.
+# Dadurch müssen Abhängigkeiten nicht bei jedem Pipeline-Lauf neu heruntergeladen werden.
 cache:
   paths:
-    - .m2/repository
+    - .m2/repository # Der Pfad zum lokalen Maven-Repository im Docker-Container
 
 build_job:
-  stage: build
-  script:
-    - echo "Building the project..."
-    - mvn $MAVEN_CLI_OPTS compile
-  artifacts:
+  stage: build # Gehört zur 'build'-Phase
+  script: # Die Befehle, die ausgeführt werden sollen
+    - echo "Building the project..." # Einfache Log-Ausgabe
+    - mvn $MAVEN_CLI_OPTS compile # Kompiliert das Projekt
+  artifacts: # Was dieser Job als "Ergebnis" für nachfolgende Jobs speichert
     paths:
-      - target/classes
-      - target/test-classes
-    expire_in: 1 hour
+      - target/classes # Kompilierte Anwendungs-Klassen
+      - target/test-classes # Kompilierte Test-Klassen
+    expire_in: 1 hour # Wie lange diese Artefakte gespeichert bleiben sollen
 
 test_job:
-  stage: test
+  stage: test # Gehört zur 'test'-Phase
   script:
     - echo "Running tests..."
+    # Aktualisiere Paketlisten und installiere xvfb und Chromium
     - apk update && apk add --no-cache xvfb chromium
-    - sleep 5 # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
-    - XVFB_RUN_CMD=$(which xvfb-run) || true
-    - if [ -z "$XVFB_RUN_CMD" ]; then XVFB_RUN_CMD="/usr/bin/xvfb-run"; fi
+    
+    # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
+    - sleep 5 
+
+    # Finde den tatsächlichen Pfad von xvfb-run dynamisch nach der Installation
+    # Dies ist robuster, da der Pfad je nach Docker-Image variieren kann.
+    # Wir suchen in /usr/bin und /usr/local/bin, den üblichen Orten.
+    # Das Kommando 'find' kann etwas langsamer sein, aber es ist zuverlässig.
+    - XVFB_RUN_CMD=$(find /usr/bin /usr/local/bin -name "xvfb-run" -print -quit) || true
+    
+    # Fallback, falls 'find' nichts findet (sehr unwahrscheinlich nach Installation, aber zur Sicherheit)
+    - if [ -z "$XVFB_RUN_CMD" ]; then echo "Error: xvfb-run not found after installation!"; exit 1; fi
+
+    # Führe Tests mit Maven aus, unter Verwendung des ermittelten xvfb-run Befehls
     - $XVFB_RUN_CMD --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
-      - target/allure-results
-    expire_in: 1 day
+      - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
+    expire_in: 1 day # Behalte diese Ergebnisse für 1 Tag.
 
 generate_allure_report_job:
-  stage: report
-  image: franklinz/allure:latest
-  needs: ["test_job"]
+  stage: report # Gehört zur 'report'-Phase
+  image: franklinz/allure:latest # Ein schlankes Docker-Image, das die Allure CLI enthält.
+  needs: ["test_job"] # Stellt sicher, dass dieser Job erst nach dem erfolgreichen 'test_job' läuft
   script:
     - echo "Generating Allure report..."
+    # allure generate: Generiert den HTML-Report.
+    # --clean: Löscht vorherige Report-Dateien.
+    # target/allure-results: Das Eingabeverzeichnis mit den Allure-Ergebnissen (aus dem 'test_job' Artefakt).
+    # -o target/allure-report: Das Ausgabeverzeichnis für den generierten HTML-Report.
     - allure generate --clean target/allure-results -o target/allure-report
   artifacts:
     paths:
-      - target/allure-report
-    expire_in: 1 week
+      - target/allure-report # Speichert den generierten HTML-Report
+    expire_in: 1 week # Behalte den Report für 1 Woche
 
 pages:
-  stage: deploy_report
-  needs: ["generate_allure_report_job"]
+  stage: deploy_report # Gehört zur 'deploy_report'-Phase
+  needs: ["generate_allure_report_job"] # Stellt sicher, dass der Report generiert wurde
   script:
     - echo "Deploying Allure report to GitLab Pages..."
-    - mv target/allure-report/ public
+    # GitLab Pages erwartet die Dateien, die gehostet werden sollen, im Verzeichnis 'public'.
+    - mv target/allure-report/ public # Verschiebe den generierten Report in das 'public'-Verzeichnis
   artifacts:
     paths:
-      - public
+      - public # GitLab Pages wird dieses Verzeichnis hosten
+  # Dieser Job soll nur auf dem Haupt-Branch (z.B. 'master' oder 'main') ausgeführt werden.
+  # Dies verhindert, dass für jeden Feature-Branch ein Pages-Deployment erstellt wird.
   only:
     - master
     - main
