@@ -67,18 +67,17 @@ test_job:
     sleep 3 
 
     # --- WICHTIGE ÄNDERUNGEN HIER: ChromeDriver manuell herunterladen und konfigurieren ---
-    # Feste ChromeDriver-Version, basierend auf dem Log der vorherigen Fehler (138.0.7204.49)
-    # Diese Version muss zur installierten Chromium-Version passen, die von apk installiert wird.
-    # Hinweis: WebDriverManager lädt normalerweise die exakt passende Version. Hier umgehen wir WDM,
-    # daher muss die Version hier exakt passen, sonst kann es zu Kompatibilitätsproblemen kommen.
-    # Die installierte Chromium-Version ist 124.0.6367.78 (siehe Log Zeile 183).
-    # Wir versuchen es mit einer passenden ChromeDriver-Version für 124.x
-    CHROMEDRIVER_VERSION="124.0.6367.91" # Eine häufig passende Version für Chromium 124
+    # Definiere die ChromeDriver Version direkt hier, um sicherzustellen, dass die Zuweisung funktioniert
+    # Diese Version muss zur installierten Chromium-Version passen.
+    # Die installierte Chromium-Version ist 124.0.6367.78 (siehe vorherige Logs).
+    # Eine passende ChromeDriver-Version für 124.x ist 124.0.6367.91 (oder ähnlich).
+    CHROMEDRIVER_VERSION="124.0.6367.91" 
 
-    CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/$CHROMEDRIVER_VERSION/linux64/chromedriver-linux64.zip"
+    # Erstelle die URL direkt hier mit der definierten Version
+    CHROMEDRIVER_URL="https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/${CHROMEDRIVER_VERSION}/linux64/chromedriver-linux64.zip"
     
-    echo "Downloading ChromeDriver version $CHROMEDRIVER_VERSION from: $CHROMEDR_URL"
-    wget -q --show-progress "$CHROMEDR_URL" -O /tmp/chromedriver.zip
+    echo "Downloading ChromeDriver version ${CHROMEDRIVER_VERSION} from: ${CHROMEDRIVER_URL}"
+    wget -q --show-progress "${CHROMEDRIVER_URL}" -O /tmp/chromedriver.zip
 
     # Entpacke den ChromeDriver
     unzip /tmp/chromedriver.zip -d /tmp/chromedriver_extracted
