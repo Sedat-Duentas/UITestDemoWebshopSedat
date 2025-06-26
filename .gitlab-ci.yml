@@ -38,7 +38,7 @@ build_job:
 
 test_job:
   stage: test # Gehört zur 'test'-Phase
-  # --- WICHTIGE ÄNDERUNG HIER: Variablen für diesen Job deklarieren ---
+  # --- WICHTIGE ÄNDERUNG HIER: Variablen für diesen Job deklarieren (SOLLTE JETZT VORHANDEN SEIN) ---
   variables:
     CHROMEDRIVER_VERSION: "124.0.6367.91" # Festlegen der ChromeDriver Version
     CHROMEDRIVER_URL: "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/124.0.6367.91/linux64/chromedriver-linux64.zip"
