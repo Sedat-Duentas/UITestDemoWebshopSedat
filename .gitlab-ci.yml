@@ -42,7 +42,8 @@ test_job:
     echo "Running tests..."
     # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten für Chrome/ChromeDriver
     # Die --no-cache Option ist gut, um immer frische Pakete zu bekommen.
-    apk update && apk add --no-cache xvfb chromium nss freetype-libs fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl libglib2 udev dbus-libs
+    # Korrigierte Paketnamen für Alpine Linux: freetype anstatt freetype-libs, glib anstatt libglib2
+    apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs
     
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
     sleep 5 
