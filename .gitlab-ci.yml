@@ -46,16 +46,27 @@ test_job:
     # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
     sleep 5 
 
-    # Finde den tatsächlichen Pfad von xvfb-run dynamisch nach der Installation
-    # Dies ist robuster, da der Pfad je nach Docker-Image variieren kann.
+    # Finde den tatsächlichen Pfad des Xvfb-Binaries (nicht xvfb-run)
     # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
-    XVFB_RUN_CMD=$(find /usr -maxdepth 3 -name "xvfb-run" -print -quit) || true
+    X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -print -quit) || true
     
-    # Fallback, falls 'find' nichts findet (sehr unwahrscheinlich nach Installation, aber zur Sicherheit)
-    if [ -z "$XVFB_RUN_CMD" ]; then echo "Error: xvfb-run not found after installation!"; exit 1; fi
+    # Fallback, falls 'find' nichts findet (sollte nach Installation von xvfb nicht passieren)
+    if [ -z "$X_VFB_BINARY" ]; then echo "Error: Xvfb binary not found after installation!"; exit 1; fi
 
-    # Führe Tests mit Maven aus, unter Verwendung des ermittelten xvfb-run Befehls
-    $XVFB_RUN_CMD --auto-display mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+    # Startet Xvfb im Hintergrund auf Display :99
+    # '--screen 0 1280x1024x24' setzt die Bildschirmauflösung und Farbtiefe.
+    # '-ac' deaktiviert Zugriffskontrolle, was in CI-Umgebungen meist unbedenklich ist.
+    # '&': Führt den Befehl im Hintergrund aus.
+    "$X_VFB_BINARY" :99 -screen 0 1280x1024x24 -ac &
+    
+    # Exportiere DISPLAY Variable, damit Selenium weiß, welchen X-Server es nutzen soll
+    export DISPLAY=:99
+    
+    # Warte kurz, bis der X-Server gestartet ist
+    sleep 3 
+
+    # Führe Tests mit Maven aus
+    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
       - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
