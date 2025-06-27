@@ -8,6 +8,7 @@ import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
 import org.openqa.selenium.remote.RemoteWebDriver;
 
+import java.net.MalformedURLException;
 import java.net.URL;
 
 /**
@@ -35,15 +36,20 @@ public class TestSetup {
         options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
         options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
 
-        String seleniumHost = System.getenv("SELENIUM_HOST"); // Holt die Variable aus der CI-Umgebung
+        String seleniumIp = System.getenv("SELENIUM_REMOTE_IP"); // Holt die NEUE IP-Variable
         String seleniumPort = System.getenv("SELENIUM_PORT");
-        String seleniumRemoteUrl = "http://" + seleniumHost + ":" + seleniumPort + "/wd/hub";
+
+        // Die URL jetzt mit der IP-Adresse erstellen
+        String seleniumRemoteUrl = "http://" + seleniumIp + ":" + seleniumPort + "/wd/hub";
 
         try {
             driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
+        } catch (MalformedURLException e) {
+            System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumRemoteUrl);
+            throw new RuntimeException("Ungültige Selenium Remote URL", e);
         } catch (Exception e) {
-            System.err.println("Failed to start remote WebDriver: " + e.getMessage());
-            throw new RuntimeException("Could not connect to Selenium Grid", e);
+            System.err.println("Fehler beim Starten des Remote WebDriver: " + e.getMessage());
+            throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
         }
 
         //driver = new ChromeDriver(options); // Browserinstanz starten
