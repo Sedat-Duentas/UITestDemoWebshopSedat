@@ -1,14 +1,14 @@
 package base;
 
-import io.github.bonigarcia.wdm.WebDriverManager; // WIEDER AKTIVIEREN FÜR LOKALE NUTZUNG
+import io.github.bonigarcia.wdm.WebDriverManager;
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;     // WIEDER AKTIVIEREN FÜR LOKALE NUTZUNG
+import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.remote.RemoteWebDriver; // FÜR CI/CD-NUTZUNG
-import java.net.URL;                               // FÜR CI/CD-NUTZUNG
-import java.net.MalformedURLException;             // FÜR CI/CD-NUTZUNG
+import org.openqa.selenium.remote.RemoteWebDriver;
+import java.net.URL;
+import java.net.MalformedURLException;
 
 /**
  * Basisklasse für alle UI-Tests. Kapselt die Browserinitialisierung und -beendigung.
@@ -22,26 +22,24 @@ public class TestSetup {
     @BeforeEach
     public void setUp() {
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless");         // Standardmäßig headless, kann lokal auskommentiert werden
+        // Diese Argumente werden immer für beide Umgebungen benötigt
         options.addArguments("--disable-gpu");
-        options.addArguments("--no-sandbox");       // Wichtig für Docker/CI
-        options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI
-        options.addArguments("--incognito");        // Öffnet Chrome im Inkognito-Modus (optional)
+        options.addArguments("--no-sandbox");
+        options.addArguments("--disable-dev-shm-usage");
+        options.addArguments("--incognito"); // Optional, kann hier bleiben
 
-        // --- WICHTIG: KEINE options.setBinary() ZEILE HIER ---
-        // options.setBinary("/usr/bin/chromium"); // DIESE ZEILE MUSS KOMPLETT ENTFERNT SEIN ODER AUSKOMMENTIERT
-
-        // Prüfe, ob wir in einer CI/CD-Umgebung sind, indem wir eine spezifische Umgebungsvariable abfragen
-        // SELENIUM_REMOTE_IP wird von unserem GitLab CI/CD Skript gesetzt
-        String seleniumRemoteIp = System.getenv("SELENIUM_REMOTE_IP"); // NEU: Diese Variable verwenden!
-        String seleniumPort = System.getenv("SELENIUM_PORT"); // Port wird weiterhin benötigt
+        String seleniumRemoteIp = System.getenv("SELENIUM_REMOTE_IP");
+        String seleniumPort = System.getenv("SELENIUM_PORT");
 
         if (seleniumRemoteIp != null && !seleniumRemoteIp.isEmpty()) {
             // CI/CD-Pipeline-Ausführung: Nutze RemoteWebDriver
+            // HIER fügen wir das --headless Argument explizit HINZU
+            options.addArguments("--headless"); // HIER IST DAS HEADLESS-ARGUMENT FÜR CI/CD
+
             String seleniumGridUrl;
-            if (seleniumRemoteIp.contains(":")) { // Prüft, ob es eine IPv6-Adresse ist
+            if (seleniumRemoteIp.contains(":")) {
                 seleniumGridUrl = "http://[" + seleniumRemoteIp + "]:" + seleniumPort + "/wd/hub";
-            } else { // Wenn es eine IPv4-Adresse oder ein Hostname ist
+            } else {
                 seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
             }
 
@@ -58,10 +56,10 @@ public class TestSetup {
         } else {
             // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
             System.out.println("SELENIUM_REMOTE_IP not set. Using local ChromeDriver via WebDriverManager.");
-            WebDriverManager.chromedriver().setup(); // Stellt sicher, dass der passende ChromeDriver geladen ist
+            WebDriverManager.chromedriver().setup();
 
-            // Optional: Für lokale sichtbare Ausführung den Headless-Modus entfernen
-            // options.removeArguments("--headless");
+            // HIER wird KEIN --headless Argument HINZUGEFÜGT.
+            // Der Browser wird also standardmäßig sichtbar sein, wenn er lokal gestartet wird.
 
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
