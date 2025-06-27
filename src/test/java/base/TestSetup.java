@@ -36,26 +36,32 @@ public class TestSetup {
         options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
         options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
 
-        String seleniumIp = System.getenv("SELENIUM_REMOTE_IP"); // Holt die IP-Adresse (kann IPv4 oder IPv6 sein)
+        String seleniumHost = System.getenv("SELENIUM_HOST");
         String seleniumPort = System.getenv("SELENIUM_PORT");
 
-        String seleniumRemoteUrl;
-        // --- WICHTIGE ÄNDERUNG HIER: IPv6-Adresse in Klammern setzen ---
-        if (seleniumIp != null && seleniumIp.contains(":")) { // Prüfen, ob es eine IPv6-Adresse ist (enthält Doppelpunkte)
-            seleniumRemoteUrl = "http://[" + seleniumIp + "]:" + seleniumPort + "/wd/hub";
-        } else { // Wenn es eine IPv4-Adresse oder ein Hostname ist
-            seleniumRemoteUrl = "http://" + seleniumIp + ":" + seleniumPort + "/wd/hub";
-        }
-        // --- ENDE WICHTIGER ÄNDERUNG ---
-
-        try {
-            driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
-        } catch (MalformedURLException e) {
-            System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumRemoteUrl);
-            throw new RuntimeException("Ungültige Selenium Remote URL", e);
-        } catch (Exception e) {
-            System.err.println("Fehler beim Starten des Remote WebDriver: " + e.getMessage());
-            throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
+        if (seleniumHost != null && !seleniumHost.isEmpty()) {
+            // Hier wird die Logik für die CI/CD-Pipeline (RemoteWebDriver) verwendet
+            String seleniumRemoteUrl;
+            if (seleniumHost.contains(":")) { // Prüft, ob es eine IPv6-Adresse ist
+                seleniumRemoteUrl = "http://[" + seleniumHost + "]:" + seleniumPort + "/wd/hub";
+            } else { // Wenn es eine IPv4-Adresse oder ein Hostname ist
+                seleniumRemoteUrl = "http://" + seleniumHost + ":" + seleniumPort + "/wd/hub";
+            }
+            try {
+                driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
+            } catch (MalformedURLException e) {
+                System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumRemoteUrl);
+                throw new RuntimeException("Ungültige Selenium Remote URL", e);
+            } catch (Exception e) {
+                System.err.println("Fehler beim Starten des Remote WebDriver: " + e.getMessage());
+                throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
+            }
+        } else {
+            // Hier wird die Logik für die LOKALE AUSFÜHRUNG (ChromeDriver direkt) verwendet
+            WebDriverManager.chromedriver().setup(); // Initialisiert den lokalen ChromeDriver
+            // Optional: Wenn du den Browser lokal sehen willst, kannst du `--headless` hier entfernen
+            // options.removeArguments("--headless");
+            driver = new ChromeDriver(options); // Startet den lokalen Chrome-Browser
         }
 
         //driver = new ChromeDriver(options); // Browserinstanz starten
