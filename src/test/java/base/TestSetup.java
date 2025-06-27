@@ -1,90 +1,78 @@
 package base;
 
-import io.github.bonigarcia.wdm.WebDriverManager;
+import io.github.bonigarcia.wdm.WebDriverManager; // WIEDER AKTIVIEREN FÜR LOKALE NUTZUNG
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.chrome.ChromeDriver;
+import org.openqa.selenium.chrome.ChromeDriver;     // WIEDER AKTIVIEREN FÜR LOKALE NUTZUNG
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.remote.RemoteWebDriver;
-
-import java.net.MalformedURLException;
-import java.net.URL;
+import org.openqa.selenium.remote.RemoteWebDriver; // FÜR CI/CD-NUTZUNG
+import java.net.URL;                               // FÜR CI/CD-NUTZUNG
+import java.net.MalformedURLException;             // FÜR CI/CD-NUTZUNG
 
 /**
  * Basisklasse für alle UI-Tests. Kapselt die Browserinitialisierung und -beendigung.
+ * Konfiguriert den WebDriver dynamisch für lokale Ausführung (ChromeDriver) oder CI/CD (RemoteWebDriver).
  */
-
 public class TestSetup {
 
-    // WebDriver steht den Testklassen zur Verfügung
     protected WebDriver driver;
-
-    // Basis-URL als statische Konstante
     public static final String BASE_URL = "https://demowebshop.tricentis.com/";
 
-    // Wird vor jedem Test aufgerufen. Initialisiert den Chrome-Browser im Inkognito-Modus und öffnet die Zielseite.
     @BeforeEach
     public void setUp() {
-        // --- WICHTIGE ÄNDERUNG HIER: WebDriverManager.chromedriver().setup() ENTFERNEN ---
-        // WebDriverManager.chromedriver().setup(); // Diese Zeile entfernen oder auskommentieren
-
         ChromeOptions options = new ChromeOptions();
-        options.addArguments("--headless"); // Für CI/CD-Umgebung
-        options.addArguments("--disable-gpu"); // Optional: Manchmal hilfreich auf Linux-Systemen
-        options.addArguments("--no-sandbox"); // Wichtig für Docker/CI-Umgebungen, um Sandbox-Fehler zu vermeiden
-        options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
-        options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
+        options.addArguments("--headless");         // Standardmäßig headless, kann lokal auskommentiert werden
+        options.addArguments("--disable-gpu");
+        options.addArguments("--no-sandbox");       // Wichtig für Docker/CI
+        options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI
+        options.addArguments("--incognito");        // Öffnet Chrome im Inkognito-Modus (optional)
 
-        String seleniumHost = System.getenv("SELENIUM_HOST");
-        String seleniumPort = System.getenv("SELENIUM_PORT");
+        // --- WICHTIG: KEINE options.setBinary() ZEILE HIER ---
+        // options.setBinary("/usr/bin/chromium"); // DIESE ZEILE MUSS KOMPLETT ENTFERNT SEIN ODER AUSKOMMENTIERT
 
-        if (seleniumHost != null && !seleniumHost.isEmpty()) {
-            // Hier wird die Logik für die CI/CD-Pipeline (RemoteWebDriver) verwendet
-            String seleniumRemoteUrl;
-            if (seleniumHost.contains(":")) { // Prüft, ob es eine IPv6-Adresse ist
-                seleniumRemoteUrl = "http://[" + seleniumHost + "]:" + seleniumPort + "/wd/hub";
+        // Prüfe, ob wir in einer CI/CD-Umgebung sind, indem wir eine spezifische Umgebungsvariable abfragen
+        // SELENIUM_REMOTE_IP wird von unserem GitLab CI/CD Skript gesetzt
+        String seleniumRemoteIp = System.getenv("SELENIUM_REMOTE_IP"); // NEU: Diese Variable verwenden!
+        String seleniumPort = System.getenv("SELENIUM_PORT"); // Port wird weiterhin benötigt
+
+        if (seleniumRemoteIp != null && !seleniumRemoteIp.isEmpty()) {
+            // CI/CD-Pipeline-Ausführung: Nutze RemoteWebDriver
+            String seleniumGridUrl;
+            if (seleniumRemoteIp.contains(":")) { // Prüft, ob es eine IPv6-Adresse ist
+                seleniumGridUrl = "http://[" + seleniumRemoteIp + "]:" + seleniumPort + "/wd/hub";
             } else { // Wenn es eine IPv4-Adresse oder ein Hostname ist
-                seleniumRemoteUrl = "http://" + seleniumHost + ":" + seleniumPort + "/wd/hub";
+                seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
             }
+
+            System.out.println("Connecting to remote Selenium Grid at: " + seleniumGridUrl);
             try {
-                driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
+                driver = new RemoteWebDriver(new URL(seleniumGridUrl), options);
             } catch (MalformedURLException e) {
-                System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumRemoteUrl);
+                System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumGridUrl);
                 throw new RuntimeException("Ungültige Selenium Remote URL", e);
             } catch (Exception e) {
-                System.err.println("Fehler beim Starten des Remote WebDriver: " + e.getMessage());
+                System.err.println("Fehler beim Starten des Remote WebDriver von " + seleniumGridUrl + ": " + e.getMessage());
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
             }
         } else {
-            // Hier wird die Logik für die LOKALE AUSFÜHRUNG (ChromeDriver direkt) verwendet
-            WebDriverManager.chromedriver().setup(); // Initialisiert den lokalen ChromeDriver
-            // Optional: Wenn du den Browser lokal sehen willst, kannst du `--headless` hier entfernen
+            // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
+            System.out.println("SELENIUM_REMOTE_IP not set. Using local ChromeDriver via WebDriverManager.");
+            WebDriverManager.chromedriver().setup(); // Stellt sicher, dass der passende ChromeDriver geladen ist
+
+            // Optional: Für lokale sichtbare Ausführung den Headless-Modus entfernen
             // options.removeArguments("--headless");
-            driver = new ChromeDriver(options); // Startet den lokalen Chrome-Browser
+
+            driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
 
-        //driver = new ChromeDriver(options); // Browserinstanz starten
         driver.manage().window().maximize(); // Fenster maximieren
         driver.get(BASE_URL); // Zielseite (URL) laden
     }
 
-    /*
-    // Wird vor jedem Test aufgerufen. Initialisiert den Chrome-Browser im Inkognito-Modus und öffnet die Zielseite.
-    @BeforeEach
-    public void setUp() {
-        WebDriverManager.chromedriver().setup(); // Stellt sicher, dass der passende ChromeDriver geladen ist
-        ChromeOptions options = new ChromeOptions();
-        options.addArguments("--incognito"); // öffnet Chrome im Inkognito-Modus
-        driver = new ChromeDriver(options); // Browserinstanz starten
-        driver.manage().window().maximize(); // Fenster maximieren
-        driver.get(BASE_URL); // Zielseite (URL) laden
-    }
-     */
-    // Wird nach jedem Test aufgerufen. Schließt den Browser und gibt Ressourcen frei.
     @AfterEach
     public void tearDown() {
-        if (driver != null) { // Wenn ein Browser existiert
+        if (driver != null) {
             driver.quit(); // Browser schließen
         }
     }
