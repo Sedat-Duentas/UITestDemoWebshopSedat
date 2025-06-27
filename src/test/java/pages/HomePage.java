@@ -33,7 +33,7 @@ public class HomePage {
         return new RegisterPage(driver);
     }
 
-    // Navigiert zur Login-Seite und gibt eine neue Instanz der LoginPage.
+    // Navigiert zur Login-Seite. Wartet auf Benachrichtigungen, um Klicks zu ermöglichen.
     public LoginPage goToLoginPage() {
         waitForElementNotVisible(driver, BAR_NOTIFICATION_SUCCESS);
         waitForElementClickable(driver, LOGIN_LINK).click();
@@ -46,7 +46,7 @@ public class HomePage {
         return new HomePage(driver);
     }
 
-    // Öffnet die Warenkorb-Seite und gibt eine neue Instanz der CartPage.
+    /// Öffnet die Warenkorb-Seite. Wartet auf Benachrichtigungen, um Klicks zu ermöglichen.
     public CartPage goToCart() {
         waitForElementNotVisible(driver, BAR_NOTIFICATION_SUCCESS);
         waitForElementClickable(driver, CART_LINK).click();
