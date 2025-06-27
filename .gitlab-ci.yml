@@ -77,15 +77,32 @@ test_job:
     expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report
-  image: franklinz/allure:latest
-  needs: ["test_job"]
-  script:
-    - echo "Generating Allure report..."
-    - allure generate --clean target/allure-results -o target/allure-report
+  stage: report # Gehört zur 'report'-Phase
+  # --- WICHTIGE ÄNDERUNG HIER: Image und Script für Allure CLI Installation ---
+  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
+  needs: ["test_job"] 
+  script: |
+    echo "Generating Allure report..."
+    # Installiere curl, unzip und die Allure CLI manuell
+    apk update && apk add --no-cache curl unzip
+
+    # Allure CLI Version festlegen (ersetze durch die neueste stabile Version, die du möchtest)
+    ALLURE_VERSION="2.27.0" # Überprüfe die neueste Version auf GitHub: https://github.com/allure-framework/allure2/releases
+    ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
+    
+    echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
+    wget -q --show-progress "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
+    
+    unzip /tmp/allure-commandline.zip -d /opt/allure-framework
+    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
+    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
+
+    # Generiere den HTML-Report
+    allure generate --clean target/allure-results -o target/allure-report
+  # --- ENDE WICHTIGER ÄNDERUNG ---
   artifacts:
     paths:
-      - target/allure-report
+      - target/allure-report # Speichert den generierten HTML-Report
     expire_in: 1 week
 
 pages:
