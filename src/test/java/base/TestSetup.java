@@ -36,11 +36,17 @@ public class TestSetup {
         options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
         options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
 
-        String seleniumIp = System.getenv("SELENIUM_REMOTE_IP"); // Holt die NEUE IP-Variable
+        String seleniumIp = System.getenv("SELENIUM_REMOTE_IP"); // Holt die IP-Adresse (kann IPv4 oder IPv6 sein)
         String seleniumPort = System.getenv("SELENIUM_PORT");
 
-        // Die URL jetzt mit der IP-Adresse erstellen
-        String seleniumRemoteUrl = "http://" + seleniumIp + ":" + seleniumPort + "/wd/hub";
+        String seleniumRemoteUrl;
+        // --- WICHTIGE ÄNDERUNG HIER: IPv6-Adresse in Klammern setzen ---
+        if (seleniumIp != null && seleniumIp.contains(":")) { // Prüfen, ob es eine IPv6-Adresse ist (enthält Doppelpunkte)
+            seleniumRemoteUrl = "http://[" + seleniumIp + "]:" + seleniumPort + "/wd/hub";
+        } else { // Wenn es eine IPv4-Adresse oder ein Hostname ist
+            seleniumRemoteUrl = "http://" + seleniumIp + ":" + seleniumPort + "/wd/hub";
+        }
+        // --- ENDE WICHTIGER ÄNDERUNG ---
 
         try {
             driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
