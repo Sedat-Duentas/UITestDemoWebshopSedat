@@ -14,6 +14,7 @@ public class HomePageLocators {
     public static final By SEARCH_BUTTON = By.cssSelector("input.button-1.search-box-button");
     public static final By LOGOUT_LINK = By.className("ico-logout");
     public static final By LOGGED_IN_ACCOUNT_LINK = By.cssSelector(".header-links .account");
+    public static final By BAR_NOTIFICATION_SUCCESS = By.id("bar-notification"); // Oder By.cssSelector(".bar-notification.success")
 
     // Dynamischer Locator für Kategorien im Hauptmenü
     public static By categoryLink(String categoryName) {

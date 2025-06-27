@@ -24,6 +24,12 @@ public class WaitUtils {
                 .until(ExpectedConditions.visibilityOfElementLocated(locator));
     }
 
+    // Wartet, bis ein Web-Element anhand des übergebenen Locators nicht mehr sichtbar ist (unsichtbar oder nicht im DOM).
+    public static boolean waitForElementNotVisible(WebDriver driver, By locator) {
+        return new WebDriverWait(driver, Duration.ofSeconds(DEFAULT_TIMEOUT))
+                .until(ExpectedConditions.invisibilityOfElementLocated(locator));
+    }
+
     // Wartet, bis ein Web-Element anhand des übergebenen Locators anklickbar ist
     public static WebElement waitForElementClickable(WebDriver driver, By locator) {
         return new WebDriverWait(driver, Duration.ofSeconds(DEFAULT_TIMEOUT))

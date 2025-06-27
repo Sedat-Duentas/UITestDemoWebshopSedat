@@ -3,8 +3,7 @@ package pages;
 import base.TestSetup;
 import org.openqa.selenium.WebDriver;
 import static locators.HomePageLocators.*;
-import static utils.WaitUtils.waitForElementClickable;
-import static utils.WaitUtils.waitForElementVisible;
+import static utils.WaitUtils.*;
 
 /**
  * Page Object Klasse für die Startseite (HomePage). Kapselt alle Aktionen, die auf der Startseite möglich sind.
@@ -36,6 +35,7 @@ public class HomePage {
 
     // Navigiert zur Login-Seite und gibt eine neue Instanz der LoginPage.
     public LoginPage goToLoginPage() {
+        waitForElementNotVisible(driver, BAR_NOTIFICATION_SUCCESS);
         waitForElementClickable(driver, LOGIN_LINK).click();
         return new LoginPage(driver);
     }
@@ -48,6 +48,7 @@ public class HomePage {
 
     // Öffnet die Warenkorb-Seite und gibt eine neue Instanz der CartPage.
     public CartPage goToCart() {
+        waitForElementNotVisible(driver, BAR_NOTIFICATION_SUCCESS);
         waitForElementClickable(driver, CART_LINK).click();
         return new CartPage(driver);
     }
