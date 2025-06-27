@@ -33,33 +33,43 @@ build_job:
 
 test_job:
   stage: test
-  # --- WICHTIGE ÄNDERUNG HIER: `services` und `variables` für Remote WebDriver ---
-  services: # Dieser Block definiert einen zusätzlichen Docker-Container, der parallel läuft
-    - selenium/standalone-chrome:latest # Das offizielle Selenium Chrome Standalone Image
+  services:
+    - selenium/standalone-chrome:latest
   variables:
-    # Hostname für den Selenium-Service. GitLab erzeugt standardmäßig einen Hostnamen:
-    # service_name -> service_name__alias -> selenium__standalone-chrome
+    # Hostname für den Selenium-Service. SELENIUM_HOST ist immer noch der GitLab Alias
     SELENIUM_HOST: "selenium__standalone-chrome" 
-    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
-  # --- ENDE WICHTIGER ÄNDERUNG ---
-  script: | # Das Pipe-Symbol '|' bleibt hier korrekt
+    SELENIUM_PORT: "4444" 
+  script: |
     echo "Running tests using Selenium Standalone Chrome service..."
-    # Wir brauchen nur wget und unzip, falls wir sie für andere Dinge brauchen, aber nicht mehr für Chrome selbst.
-    apk update && apk add --no-cache wget unzip curl # curl für den Health Check
-
-    # Keine manuellen Xvfb oder Chromium/ChromeDriver Installationen mehr, da der Service das alles mitbringt.
-    # Keine DISPLAY oder JAVA_OPTS für den lokalen ChromeDriver.
-
+    apk update && apk add --no-cache curl # curl ist bereits da, aber zur Sicherheit nochmal
+    
     # Warte, bis der Selenium-Service gestartet und bereit ist
     echo "Waiting for Selenium Grid to be ready..."
-    while ! curl -sSL "http://${SELENIUM_HOST}:${SELENIUM_PORT}/wd/hub/status" 2>&1 | grep -q "\"ready\": true"; do
+    SELENIUM_URL="http://${SELENIUM_HOST}:${SELENIUM_PORT}/wd/hub"
+    while ! curl -sSL "${SELENIUM_URL}/status" 2>&1 | grep -q "\"ready\": true"; do
       echo "Selenium Grid is not yet ready. Waiting..."
       sleep 1
     done
     echo "Selenium Grid is ready!"
 
+    # --- WICHTIGE ÄNDERUNG HIER: Finde die IP-Adresse des Selenium-Services ---
+    # Finde die IP-Adresse des Selenium-Containers und exportiere sie als Umgebungsvariable
+    # Die IP des Service-Containers ist über seinen Alias im Docker-Netzwerk erreichbar.
+    # Wir benutzen 'getent hosts' um die IP-Adresse des Hostnamens 'selenium__standalone-chrome' aufzulösen.
+    SELENIUM_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
+    
+    if [ -z "$SELENIUM_IP" ]; then
+      echo "Error: Could not resolve IP for Selenium service ${SELENIUM_HOST}. Aborting."
+      exit 1
+    fi
+    
+    # Exportiere die IP-Adresse als neue Umgebungsvariable
+    export SELENIUM_REMOTE_IP="${SELENIUM_IP}"
+    echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
+    # --- ENDE WICHTIGER ÄNDERUNG ---
+
     # Führe Tests mit Maven aus
-    # Der Java-Code wurde bereits auf RemoteWebDriver umgestellt und nutzt SELENIUM_HOST/PORT aus Umgebung
+    # Der Java-Code muss jetzt SELENIUM_REMOTE_IP statt SELENIUM_HOST nutzen!
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
