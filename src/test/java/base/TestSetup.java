@@ -6,6 +6,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.remote.RemoteWebDriver;
+
+import java.net.URL;
 
 /**
  * Basisklasse für alle UI-Tests. Kapselt die Browserinitialisierung und -beendigung.
@@ -32,10 +35,18 @@ public class TestSetup {
         options.addArguments("--disable-dev-shm-usage"); // Wichtig für Docker/CI-Umgebungen
         options.addArguments("--incognito"); // Öffnet Chrome im Inkognito-Modus (optional in Headless)
 
-        // Füge den Pfad zum Chromium-Binary hinzu, das in der CI-Umgebung installiert wurde
-        options.setBinary("/usr/bin/chromium"); // Oder "/usr/bin/chromium-browser" falls das der Pfad ist
+        String seleniumHost = System.getenv("SELENIUM_HOST"); // Holt die Variable aus der CI-Umgebung
+        String seleniumPort = System.getenv("SELENIUM_PORT");
+        String seleniumRemoteUrl = "http://" + seleniumHost + ":" + seleniumPort + "/wd/hub";
 
-        driver = new ChromeDriver(options); // Browserinstanz starten
+        try {
+            driver = new RemoteWebDriver(new URL(seleniumRemoteUrl), options);
+        } catch (Exception e) {
+            System.err.println("Failed to start remote WebDriver: " + e.getMessage());
+            throw new RuntimeException("Could not connect to Selenium Grid", e);
+        }
+
+        //driver = new ChromeDriver(options); // Browserinstanz starten
         driver.manage().window().maximize(); // Fenster maximieren
         driver.get(BASE_URL); // Zielseite (URL) laden
     }
