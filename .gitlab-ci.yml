@@ -1,127 +1,92 @@
 # .gitlab-ci.yml
 
 # Definiert das Docker-Image, das für alle Jobs in dieser Pipeline verwendet wird.
-# Wir wählen ein Maven-Image mit Java 21 und Alpine Linux (sehr schlank).
 image: maven:3.9.6-eclipse-temurin-21-alpine
 
 # Definiert die verschiedenen Phasen (Stages) unserer Pipeline.
-# Jobs in späteren Stages laufen nur, wenn alle Jobs in früheren Stages erfolgreich waren.
 stages:
   - build
   - test
   - report
-  - deploy_report # Für GitLab Pages Hosting des Allure Reports
+  - deploy_report
 
 # Definition von Umgebungsvariablen, die in den Jobs verwendet werden können.
-# MAVEN_OPTS: Konfiguriert Maven für schnellere Builds (lokaler Repository-Pfad, reduzierte Logs).
-# MAVEN_CLI_OPTS: Standard-Optionen für Maven-Befehle.
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
   MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
 
 # Definiert einen Cache für Maven-Abhängigkeiten.
-# Dadurch müssen Abhängigkeiten nicht bei jedem Pipeline-Lauf neu heruntergeladen werden.
 cache:
   paths:
-    - .m2/repository # Der Pfad zum lokalen Maven-Repository im Docker-Container
+    - .m2/repository
 
 build_job:
-  stage: build # Gehört zur 'build'-Phase
-  script: # Die Befehle, die ausgeführt werden sollen
-    - echo "Building the project..." # Einfache Log-Ausgabe
-    - mvn $MAVEN_CLI_OPTS compile # Kompiliert das Projekt
-  artifacts: # Was dieser Job als "Ergebnis" für nachfolgende Jobs speichert
-    paths:
-      - target/classes # Kompilierte Anwendungs-Klassen
-      - target/test-classes # Kompilierte Test-Klassen
-    expire_in: 1 hour # Wie lange diese Artefakte gespeichert bleiben sollen
-
-test_job:
-  stage: test # Gehört zur 'test'-Phase
-  # --- WICHTIGE ÄNDERUNG HIER: Variablen für diesen Job deklarieren ---
-  variables:
-    CHROMEDRIVER_VERSION: "124.0.6367.91" # Festlegen der ChromeDriver Version
-    CHROMEDRIVER_URL: "https://edgedl.me.gvt1.com/edgedl/chrome/chrome-for-testing/124.0.6367.91/linux64/chromedriver-linux64.zip"
-  # --- ENDE WICHTIGER ÄNDERUNG ---
-  script: | # Das Pipe-Symbol '|' bleibt hier korrekt
-    echo "Running tests..."
-    # Aktualisiere Paketlisten und installiere xvfb, Chromium UND wichtige Abhängigkeiten
-    apk update && apk add --no-cache xvfb chromium nss freetype fontconfig brotli libjpeg-turbo libpng libwebp libxml2 libxslt mesa-gl glib udev dbus-libs wget unzip libstdc++
-    
-    # Optional: Eine kurze Pause geben, falls die Systempfade noch aktualisiert werden müssen
-    sleep 5 
-
-    # Finde den tatsächlichen Pfad des Xvfb-Binaries
-    # Wir suchen im gesamten /usr Verzeichnis, aber begrenzt auf maxdepth 3, um schnell zu bleiben.
-    X_VFB_BINARY=$(find /usr -maxdepth 3 -name "Xvfb" -type f -print -quit) || true
-    
-    # Fallback, falls 'find' nichts findet (sollte nach Installation von xvfb nicht passieren)
-    if [ -z "$X_VFB_BINARY" ]; then echo "Error: Xvfb binary not found after installation!"; exit 1; fi
-
-    # Startet Xvfb im Hintergrund auf Display :99
-    # '--screen 0 1280x1024x24' setzt die Bildschirmauflösung und Farbtiefe.
-    # '-ac' deaktiviert Zugriffskontrolle, was in CI-Umgebungen meist unbedenklich ist.
-    # '&': Führt den Befehl im Hintergrund aus.
-    "$X_VFB_BINARY" :99 -screen 0 1280x1024x24 -ac &
-    
-    # Exportiere DISPLAY Variable, damit Selenium weiß, welchen X-Server es nutzen soll
-    export DISPLAY=:99
-    
-    # Warte kurz, bis der X-Server gestartet ist
-    sleep 3 
-
-    # --- ChromeDriver manuell herunterladen und konfigurieren ---
-    # Die Variablen sind jetzt als Job-Variablen verfügbar und müssen nicht mehr im Script neu definiert werden
-    echo "Downloading ChromeDriver version ${CHROMEDRIVER_VERSION} from: ${CHROMEDRIVER_URL}"
-    wget -q --show-progress "${CHROMEDRIVER_URL}" -O /tmp/chromedriver.zip
-
-    # Entpacke den ChromeDriver
-    unzip /tmp/chromedriver.zip -d /tmp/chromedriver_extracted
-    # Der eigentliche chromedriver ist oft in einem Unterordner nach dem Entpacken
-    mv /tmp/chromedriver_extracted/chromedriver-linux64/chromedriver /usr/local/bin/chromedriver
-
-    # Mach den ChromeDriver ausführbar
-    chmod +x /usr/local/bin/chromedriver
-
-    # Setze die System Property für Selenium, damit es den manuell installierten Treiber nutzt
-    export JAVA_OPTS="-Dwebdriver.chrome.driver=/usr/local/bin/chromedriver"
-    # --- ENDE ChromeDriver Installation ---
-
-    # Führe Tests mit Maven aus (verwende JAVA_OPTS, das den Treiber-Pfad setzt)
-    mvn $MAVEN_CLI_OPTS $JAVA_OPTS test -Dsurefire.useFile=false
+  stage: build
+  script:
+    - echo "Building the project..."
+    - mvn $MAVEN_CLI_OPTS compile
   artifacts:
     paths:
-      - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt (JSON/XML).
-    expire_in: 1 day # Behalte diese Ergebnisse für 1 Tag.
+      - target/classes
+      - target/test-classes
+    expire_in: 1 hour
+
+test_job:
+  stage: test
+  # --- WICHTIGE ÄNDERUNG HIER: `services` und `variables` für Remote WebDriver ---
+  services: # Dieser Block definiert einen zusätzlichen Docker-Container, der parallel läuft
+    - selenium/standalone-chrome:latest # Das offizielle Selenium Chrome Standalone Image
+  variables:
+    # Hostname für den Selenium-Service. GitLab erzeugt standardmäßig einen Hostnamen:
+    # service_name -> service_name__alias -> selenium__standalone-chrome
+    SELENIUM_HOST: "selenium__standalone-chrome" 
+    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
+  # --- ENDE WICHTIGER ÄNDERUNG ---
+  script: | # Das Pipe-Symbol '|' bleibt hier korrekt
+    echo "Running tests using Selenium Standalone Chrome service..."
+    # Wir brauchen nur wget und unzip, falls wir sie für andere Dinge brauchen, aber nicht mehr für Chrome selbst.
+    apk update && apk add --no-cache wget unzip curl # curl für den Health Check
+
+    # Keine manuellen Xvfb oder Chromium/ChromeDriver Installationen mehr, da der Service das alles mitbringt.
+    # Keine DISPLAY oder JAVA_OPTS für den lokalen ChromeDriver.
+
+    # Warte, bis der Selenium-Service gestartet und bereit ist
+    echo "Waiting for Selenium Grid to be ready..."
+    while ! curl -sSL "http://${SELENIUM_HOST}:${SELENIUM_PORT}/wd/hub/status" 2>&1 | grep -q "\"ready\": true"; do
+      echo "Selenium Grid is not yet ready. Waiting..."
+      sleep 1
+    done
+    echo "Selenium Grid is ready!"
+
+    # Führe Tests mit Maven aus
+    # Der Java-Code wurde bereits auf RemoteWebDriver umgestellt und nutzt SELENIUM_HOST/PORT aus Umgebung
+    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+  artifacts:
+    paths:
+      - target/allure-results
+    expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report # Gehört zur 'report'-Phase
-  image: franklinz/allure:latest # Ein schlankes Docker-Image, das die Allure CLI enthält.
-  needs: ["test_job"] # Stellt sicher, dass dieser Job erst nach dem erfolgreichen 'test_job' läuft
+  stage: report
+  image: franklinz/allure:latest
+  needs: ["test_job"]
   script:
     - echo "Generating Allure report..."
-    # allure generate: Generiert den HTML-Report.
-    # --clean: Löscht vorherige Report-Dateien.
-    # target/allure-results: Das Eingabeverzeichnis mit den Allure-Ergebnissen (aus dem 'test_job' Artefakt).
-    # -o target/allure-report: Das Ausgabeverzeichnis für den generierten HTML-Report.
     - allure generate --clean target/allure-results -o target/allure-report
   artifacts:
     paths:
-      - target/allure-report # Speichert den generierten HTML-Report
-    expire_in: 1 week # Behalte den Report für 1 Woche
+      - target/allure-report
+    expire_in: 1 week
 
 pages:
-  stage: deploy_report # Gehört zur 'deploy_report'-Phase
-  needs: ["generate_allure_report_job"] # Stellt sicher, dass der Report generiert wurde
+  stage: deploy_report
+  needs: ["generate_allure_report_job"]
   script:
     - echo "Deploying Allure report to GitLab Pages..."
-    # GitLab Pages erwartet die Dateien, die gehostet werden sollen, im Verzeichnis 'public'.
-    - mv target/allure-report/ public # Verschiebe den generierten Report in das 'public'-Verzeichnis
+    - mv target/allure-report/ public
   artifacts:
     paths:
-      - public # GitLab Pages wird dieses Verzeichnis hosten
-  # Dieser Job soll nur auf dem Haupt-Branch (z.B. 'master' oder 'main') ausgeführt werden.
-  # Dies verhindert, dass für jeden Feature-Branch ein Pages-Deployment erstellt wird.
+      - public
   only:
     - master
     - main
