@@ -36,24 +36,19 @@ build_job:
     expire_in: 1 hour
 
 test_job:
-  stage: test # Gehört zur 'test'-Phase
-  services: # Definiert den Selenium Chrome Standalone Service, der parallel gestartet wird
-    # --- WICHTIGE ÄNDERUNG: Spezifische Selenium Image Version ---
-    # :latest ist riskant; verwenden wir eine Version passend zu Chrome 124.
-    - selenium/standalone-chrome:4.20.0-chrome-124-webdriver
+  stage: test
+  services:
+    # --- WICHTIGE ÄNDERUNG: Image Version auf 4.20.0 ändern ---
+    - selenium/standalone-chrome:4.20.0 # Dies sollte ein gültiges Tag sein
   variables:
-    # Der Hostname unter dem der Selenium-Service im Docker-Netzwerk des Runners erreichbar ist.
-    # GitLab vergibt Aliase für Services.
     SELENIUM_HOST: "selenium__standalone-chrome" 
-    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
-  script: | # Mehrzeiliger Shell-Skript
+    SELENIUM_PORT: "4444" 
+  script: |
     echo "Running tests using Selenium Standalone Chrome service..."
-    # Installiere nur curl, da andere Pakete wie xvfb, chromium etc. vom Selenium-Service selbst bereitgestellt werden.
     apk update && apk add --no-cache curl
     
-    # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
+    # Warte, bis der Selenium-Service gestartet und bereit ist
     echo "Waiting for Selenium Grid to be ready..."
-    # Löse den GitLab Service-Alias in seine tatsächliche IP-Adresse auf (kann IPv4 oder IPv6 sein).
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
     if [ -z "$SERVICE_IP" ]; then
@@ -61,34 +56,25 @@ test_job:
       exit 1
     fi
     
-    # Exportiere die aufgelöste IP-Adresse als Umgebungsvariable, die der Java-Code verwendet.
     export SELENIUM_REMOTE_IP="${SERVICE_IP}"
     echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
 
-    # Führe einen Health Check durch, um zu warten, bis der Grid wirklich ready ist.
-    # Die URL muss korrekt für IPv6-Adressen geklammert sein.
     SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub/status"
-    # Wenn die IP eine IPv6-Adresse ist, muss sie in Klammern gesetzt werden für die URL.
     if [[ "${SELENIUM_REMOTE_IP}" == *:* ]]; then
       SELENIUM_REMOTE_URL_FOR_CHECK="http://[${SELENIUM_REMOTE_IP}]:${SELENIUM_PORT}/wd/hub/status"
     fi
 
     echo "Waiting for Selenium Grid at ${SELENIUM_REMOTE_URL_FOR_CHECK} to be ready (curl check)..."
-    # Die Schleife wartet alle 1 Sekunde, bis der Status "ready" ist.
-    # Das Timeout für diese Schleife ist jetzt durch den Job-Timeout (Standard 1 Stunde) begrenzt, 
-    # sowie durch GITLAB_ANY_SERVICE_TIMEOUT, welches den Start des Docker-Service selbst überwacht.
     while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}" 2>&1 | grep -q "\"ready\": true"; do
       echo "Selenium Grid is not yet ready. Waiting..."
       sleep 1
     done
     echo "Selenium Grid is ready!"
-
-    # Führe Tests mit Maven aus.
-    # Der Java-Code in TestSetup.java wurde angepasst, um SELENIUM_REMOTE_IP und SELENIUM_PORT zu verwenden.
+    
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
-      - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt und an den nächsten Job übergeben.
+      - target/allure-results
     expire_in: 1 day
 
 generate_allure_report_job:
