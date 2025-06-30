@@ -14,10 +14,9 @@ stages:
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
   MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
-  # --- WICHTIGE ÄNDERUNG: Erhöhe das Service-Timeout für den Runner ---
+  # Erhöhe das Service-Timeout für den Runner.
   # Dies gibt dem Selenium Standalone Chrome Service mehr Zeit zum Starten.
   GITLAB_ANY_SERVICE_TIMEOUT: 120 # Timeout in Sekunden (2 Minuten)
-  # --- ENDE WICHTIGER ÄNDERUNG ---
 
 # Definiert einen Cache für Maven-Abhängigkeiten.
 cache:
@@ -36,19 +35,21 @@ build_job:
     expire_in: 1 hour
 
 test_job:
-  stage: test
-  services:
-    # --- WICHTIGE ÄNDERUNG: Image Version auf 4.20.0 ändern ---
-    - selenium/standalone-chrome:4.20.0 # Dies sollte ein gültiges Tag sein
+  stage: test # Gehört zur 'test'-Phase
+  services: # Definiert den Selenium Chrome Standalone Service, der parallel gestartet wird
+    - selenium/standalone-chrome:4.20.0-chrome-124-webdriver # Spezifische und hoffentlich stabile Version
   variables:
+    # Der Hostname unter dem der Selenium-Service im Docker-Netzwerk des Runners erreichbar ist.
     SELENIUM_HOST: "selenium__standalone-chrome" 
-    SELENIUM_PORT: "4444" 
-  script: |
+    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
+  script: | # Mehrzeiliger Shell-Skript
     echo "Running tests using Selenium Standalone Chrome service..."
+    # Installiere nur curl, da andere Pakete wie xvfb, chromium etc. vom Selenium-Service selbst bereitgestellt werden.
     apk update && apk add --no-cache curl
     
-    # Warte, bis der Selenium-Service gestartet und bereit ist
+    # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
     echo "Waiting for Selenium Grid to be ready..."
+    # Löse den GitLab Service-Alias in seine tatsächliche IP-Adresse auf (kann IPv4 oder IPv6 sein).
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
     if [ -z "$SERVICE_IP" ]; then
@@ -56,9 +57,12 @@ test_job:
       exit 1
     fi
     
+    # Exportiere die aufgelöste IP-Adresse als Umgebungsvariable, die der Java-Code verwendet.
     export SELENIUM_REMOTE_IP="${SERVICE_IP}"
     echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
 
+    # Führe einen Health Check durch, um zu warten, bis der Grid wirklich ready ist.
+    # Die URL muss korrekt für IPv6-Adressen geklammert sein.
     SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub/status"
     if [[ "${SELENIUM_REMOTE_IP}" == *:* ]]; then
       SELENIUM_REMOTE_URL_FOR_CHECK="http://[${SELENIUM_REMOTE_IP}]:${SELENIUM_PORT}/wd/hub/status"
@@ -70,11 +74,15 @@ test_job:
       sleep 1
     done
     echo "Selenium Grid is ready!"
-    
-    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
+
+    # --- WICHTIGE ÄNDERUNG: Allure Ergebnisse direkt ins Root-Verzeichnis schreiben ---
+    # `-Dallure.results.directory=allure-results` sorgt dafür, dass die Ergebnisse
+    # direkt im Build-Root-Verzeichnis 'allure-results' landen und einfacher als Artefakte
+    # an den nächsten Job übergeben werden können.
+    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=allure-results
   artifacts:
     paths:
-      - target/allure-results
+      - allure-results # <-- Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
     expire_in: 1 day
 
 generate_allure_report_job:
@@ -82,30 +90,30 @@ generate_allure_report_job:
   image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
   needs:
     - job: test_job # Braucht den Test-Job
-      artifacts: true # Fordert die Artefakte des Test-Jobs an (target/allure-results)
+      artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'allure-results')
   script: |
     echo "Generating Allure report..."
     # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
-    # Allure CLI Version festlegen
     ALLURE_VERSION="2.27.0" 
     ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     
     echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip # --show-progress ist hier nicht nötig/unterstützt
+    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
     chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
     export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
 
     # --- HINZUGEFÜGTER DIAGNOSE-SCHRITT ---
-    echo "Listing contents of target/allure-results (should contain test results):"
-    ls -la target/allure-results/ || echo "target/allure-results directory not found or empty."
+    echo "Listing contents of allure-results (should contain test results):"
+    # Da die Artefakte ins Root-Verzeichnis heruntergeladen werden, sollte 'allure-results/' hier vorhanden sein.
+    ls -la allure-results/ || echo "allure-results directory not found or empty."
     # --- ENDE DIAGNOSE-SCHRITT ---
 
-    # Generiere den HTML-Report. allure generate liest von target/allure-results (das ist der Standardpfad für Artefakte)
-    allure generate --clean target/allure-results -o target/allure-report
+    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Root-Ordner 'allure-results'.
+    allure generate --clean allure-results -o target/allure-report
   artifacts:
     paths:
       - target/allure-report # Speichert den generierten HTML-Report
