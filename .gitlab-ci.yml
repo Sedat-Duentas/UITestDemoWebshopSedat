@@ -37,7 +37,9 @@ build_job:
 test_job:
   stage: test # Gehört zur 'test'-Phase
   services: # Definiert den Selenium Chrome Standalone Service, der parallel gestartet wird
-    - selenium/standalone-chrome:4.20.0-chrome-124-webdriver # Spezifische und hoffentlich stabile Version
+    # --- WICHTIGE ÄNDERUNG: Image Version auf 4.20.0 setzen ---
+    # Dies ist ein stabiles Tag, das den neuesten passenden Chrome-Browser zieht.
+    - selenium/standalone-chrome:4.20.0 
   variables:
     # Der Hostname unter dem der Selenium-Service im Docker-Netzwerk des Runners erreichbar ist.
     SELENIUM_HOST: "selenium__standalone-chrome" 
@@ -75,14 +77,13 @@ test_job:
     done
     echo "Selenium Grid is ready!"
 
-    # --- WICHTIGE ÄNDERUNG: Allure Ergebnisse direkt ins Root-Verzeichnis schreiben ---
-    # `-Dallure.results.directory=allure-results` sorgt dafür, dass die Ergebnisse
-    # direkt im Build-Root-Verzeichnis 'allure-results' landen und einfacher als Artefakte
-    # an den nächsten Job übergeben werden können.
+    # Führe Tests mit Maven aus.
+    # Der Java-Code in TestSetup.java wurde angepasst, um SELENIUM_REMOTE_IP und SELENIUM_PORT zu verwenden.
+    # Allure Ergebnisse werden ins Root-Verzeichnis 'allure-results' geschrieben.
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=allure-results
   artifacts:
     paths:
-      - allure-results # <-- Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
+      - allure-results # Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
     expire_in: 1 day
 
 generate_allure_report_job:
@@ -100,7 +101,7 @@ generate_allure_report_job:
     ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     
     echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
+    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip # --show-progress ist hier nicht nötig/unterstützt
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
     chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
