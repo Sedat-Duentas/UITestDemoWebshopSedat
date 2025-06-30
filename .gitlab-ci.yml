@@ -107,15 +107,35 @@ generate_allure_report_job:
     export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH"
 
     # --- HINZUGEFÜGTER DIAGNOSE-SCHRITT ---
-    echo "Listing contents of current directory (should contain allure-results files directly):"
-    ls -la . # <-- Neu: Liste das aktuelle Verzeichnis auf!
-    echo "Listing contents of target/allure-results (should be empty or not exist):"
+    echo "Listing contents of current directory (should contain test results files directly):"
+    ls -la . # <-- Hier sollten die .json oder .xml Dateien liegen
+    echo "Listing contents of target/allure-results (should not exist or be empty):"
     ls -la target/allure-results/ || echo "target/allure-results directory not found or empty."
     # --- ENDE DIAGNOSE-SCHRITT ---
 
     # --- WICHTIGE ÄNDERUNG HIER: Input-Verzeichnis für allure generate ist das aktuelle Verzeichnis ---
     # `.` steht für das aktuelle Arbeitsverzeichnis, wo die Artefakte des vorherigen Jobs entpackt wurden.
-    allure generate --clean . -o target/allure-report
+    # Allure erwartet ein VERZEICHNIS, das die Ergebnisdateien enthält. Wenn die Dateien direkt im Root liegen,
+    # müssen wir einen temporären Ordner erstellen und die Dateien dorthin verschieben.
+    #
+    # BESSER: Den allure generate Befehl ändern, um die *Resultate* aus dem aktuellen Verzeichnis zu nehmen.
+    # Da die Dateien direkt im Root entpackt werden, muss Allure dort suchen.
+    # allure generate kann auch mehrere Pfade als Input akzeptieren.
+    
+    # Variante 1: Wenn die .json Dateien direkt im Root liegen:
+    # allure generate --clean ./allure-results/ -o target/allure-report  <-- WÜRDE IMMER NOCH FEHLSCHLAGEN
+    #
+    # Da allure generate einen Ordner mit Ergebnissen erwartet, müssen wir die heruntergeladenen
+    # .json-Dateien in einen Ordner verschieben und dann diesen Ordner übergeben.
+
+    mkdir -p allure-results-tmp # Erstelle einen temporären Ordner
+    mv *.json allure-results-tmp/ || true # Verschiebe alle JSON-Ergebnisse dorthin (falls vorhanden)
+    mv *.xml allure-results-tmp/ || true # Verschiebe auch XML-Ergebnisse
+    
+    echo "Listing contents of allure-results-tmp before generate:"
+    ls -la allure-results-tmp/ || echo "allure-results-tmp directory not found or empty."
+    
+    allure generate --clean allure-results-tmp -o target/allure-report # Jetzt auf den temporären Ordner zeigen
     # --- ENDE WICHTIGER ÄNDERUNG ---
   artifacts:
     paths:
