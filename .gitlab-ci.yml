@@ -87,37 +87,39 @@ test_job:
     expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report # Gehört zur 'report'-Phase
-  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
+  stage: report
+  image: maven:3.9.6-eclipse-temurin-21-alpine
   needs:
-    - job: test_job # Braucht den Test-Job
+    - job: test_job
       artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'allure-results')
   script: |
     echo "Generating Allure report..."
-    # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
     ALLURE_VERSION="2.27.0" 
     ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     
     echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip # --show-progress ist hier nicht nötig/unterstützt
+    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
-    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
-    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
+    chmod +x /opt/allure-framework/allure-*/bin/allure
+    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH"
 
     # --- HINZUGEFÜGTER DIAGNOSE-SCHRITT ---
-    echo "Listing contents of allure-results (should contain test results):"
-    # Da die Artefakte ins Root-Verzeichnis heruntergeladen werden, sollte 'allure-results/' hier vorhanden sein.
-    ls -la allure-results/ || echo "allure-results directory not found or empty."
+    echo "Listing contents of current directory (should contain allure-results files directly):"
+    ls -la . # <-- Neu: Liste das aktuelle Verzeichnis auf!
+    echo "Listing contents of target/allure-results (should be empty or not exist):"
+    ls -la target/allure-results/ || echo "target/allure-results directory not found or empty."
     # --- ENDE DIAGNOSE-SCHRITT ---
 
-    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Root-Ordner 'allure-results'.
-    allure generate --clean allure-results -o target/allure-report
+    # --- WICHTIGE ÄNDERUNG HIER: Input-Verzeichnis für allure generate ist das aktuelle Verzeichnis ---
+    # `.` steht für das aktuelle Arbeitsverzeichnis, wo die Artefakte des vorherigen Jobs entpackt wurden.
+    allure generate --clean . -o target/allure-report
+    # --- ENDE WICHTIGER ÄNDERUNG ---
   artifacts:
     paths:
-      - target/allure-report # Speichert den generierten HTML-Report
+      - target/allure-report
     expire_in: 1 week
 
 pages:
