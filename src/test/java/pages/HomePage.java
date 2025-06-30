@@ -77,7 +77,7 @@ public class HomePage {
         try {
             return waitForElementVisible(driver, LOGGED_IN_ACCOUNT_LINK).isDisplayed();
         } catch (Exception e) {
-            return false; // Element nicht gefunden/sichtbar, also nicht eingeloggt
+            return false;
         }
     }
 }
