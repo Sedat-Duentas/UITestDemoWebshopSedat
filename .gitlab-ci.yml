@@ -8,12 +8,16 @@ stages:
   - build
   - test
   - report
-  - deploy_report
+  - deploy_report # Für GitLab Pages Hosting des Allure Reports
 
 # Definition von Umgebungsvariablen, die in den Jobs verwendet werden können.
 variables:
   MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
   MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+  # --- WICHTIGE ÄNDERUNG: Erhöhe das Service-Timeout für den Runner ---
+  # Dies gibt dem Selenium Standalone Chrome Service mehr Zeit zum Starten.
+  GITLAB_ANY_SERVICE_TIMEOUT: 120 # Timeout in Sekunden (2 Minuten)
+  # --- ENDE WICHTIGER ÄNDERUNG ---
 
 # Definiert einen Cache für Maven-Abhängigkeiten.
 cache:
@@ -21,33 +25,35 @@ cache:
     - .m2/repository
 
 build_job:
-  stage: build
-  script:
+  stage: build # Gehört zur 'build'-Phase
+  script: # Die Befehle, die ausgeführt werden sollen
     - echo "Building the project..."
     - mvn $MAVEN_CLI_OPTS compile
-  artifacts:
+  artifacts: # Was dieser Job als "Ergebnis" für nachfolgende Jobs speichert
     paths:
       - target/classes
       - target/test-classes
     expire_in: 1 hour
 
 test_job:
-  stage: test
-  services:
-    - selenium/standalone-chrome:latest
+  stage: test # Gehört zur 'test'-Phase
+  services: # Definiert den Selenium Chrome Standalone Service, der parallel gestartet wird
+    # --- WICHTIGE ÄNDERUNG: Spezifische Selenium Image Version ---
+    # :latest ist riskant; verwenden wir eine Version passend zu Chrome 124.
+    - selenium/standalone-chrome:4.20.0-chrome-124-webdriver
   variables:
-    # Hostname für den Selenium-Service. SELENIUM_HOST ist immer noch der GitLab Alias.
-    # WICHTIG: Java Code in TestSetup nutzt jetzt SELENIUM_REMOTE_IP, nicht diesen Host.
+    # Der Hostname unter dem der Selenium-Service im Docker-Netzwerk des Runners erreichbar ist.
+    # GitLab vergibt Aliase für Services.
     SELENIUM_HOST: "selenium__standalone-chrome" 
-    SELENIUM_PORT: "4444" 
-  script: |
+    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
+  script: | # Mehrzeiliger Shell-Skript
     echo "Running tests using Selenium Standalone Chrome service..."
-    # apk update und curl werden für die Statusprüfung benötigt.
+    # Installiere nur curl, da andere Pakete wie xvfb, chromium etc. vom Selenium-Service selbst bereitgestellt werden.
     apk update && apk add --no-cache curl
     
-    # Warte, bis der Selenium-Service gestartet und bereit ist
+    # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
     echo "Waiting for Selenium Grid to be ready..."
-    # Finde die IP-Adresse des Selenium-Containers und exportiere sie als Umgebungsvariable
+    # Löse den GitLab Service-Alias in seine tatsächliche IP-Adresse auf (kann IPv4 oder IPv6 sein).
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
     if [ -z "$SERVICE_IP" ]; then
@@ -55,20 +61,29 @@ test_job:
       exit 1
     fi
     
-    # Exportiere die IP-Adresse als neue Umgebungsvariable, die der Java-Code nutzt
+    # Exportiere die aufgelöste IP-Adresse als Umgebungsvariable, die der Java-Code verwendet.
     export SELENIUM_REMOTE_IP="${SERVICE_IP}"
     echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
 
-    # Warte bis der Selenium-Service auf dieser IP bereit ist
-    SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub"
-    echo "Waiting for Selenium Grid at ${SELENIUM_REMOTE_URL_FOR_CHECK} to be ready..."
-    while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}/status" 2>&1 | grep -q "\"ready\": true"; do
+    # Führe einen Health Check durch, um zu warten, bis der Grid wirklich ready ist.
+    # Die URL muss korrekt für IPv6-Adressen geklammert sein.
+    SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub/status"
+    # Wenn die IP eine IPv6-Adresse ist, muss sie in Klammern gesetzt werden für die URL.
+    if [[ "${SELENIUM_REMOTE_IP}" == *:* ]]; then
+      SELENIUM_REMOTE_URL_FOR_CHECK="http://[${SELENIUM_REMOTE_IP}]:${SELENIUM_PORT}/wd/hub/status"
+    fi
+
+    echo "Waiting for Selenium Grid at ${SELENIUM_REMOTE_URL_FOR_CHECK} to be ready (curl check)..."
+    # Die Schleife wartet alle 1 Sekunde, bis der Status "ready" ist.
+    # Das Timeout für diese Schleife ist jetzt durch den Job-Timeout (Standard 1 Stunde) begrenzt, 
+    # sowie durch GITLAB_ANY_SERVICE_TIMEOUT, welches den Start des Docker-Service selbst überwacht.
+    while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}" 2>&1 | grep -q "\"ready\": true"; do
       echo "Selenium Grid is not yet ready. Waiting..."
       sleep 1
     done
     echo "Selenium Grid is ready!"
 
-    # Führe Tests mit Maven aus
+    # Führe Tests mit Maven aus.
     # Der Java-Code in TestSetup.java wurde angepasst, um SELENIUM_REMOTE_IP und SELENIUM_PORT zu verwenden.
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
@@ -84,8 +99,7 @@ generate_allure_report_job:
       artifacts: true # Fordert die Artefakte des Test-Jobs an (target/allure-results)
   script: |
     echo "Generating Allure report..."
-    # Installiere curl, unzip und die Allure CLI manuell
-    # wget ist bereits im Image, aber das Installieren stellt sicher, dass wir die "busybox" Version haben, falls nötig
+    # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
     # Allure CLI Version festlegen
@@ -93,7 +107,7 @@ generate_allure_report_job:
     ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     
     echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
+    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip # --show-progress ist hier nicht nötig/unterstützt
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
     chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
