@@ -47,17 +47,14 @@ public class TestSetup {
                 seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
             }
 
-            System.out.println("Connecting to remote Selenium Grid at: " + seleniumGridUrl);
             // RemoteWebDriver mit der konfigurierten URL initialisieren
             try {
                 driver = new RemoteWebDriver(new URL(seleniumGridUrl), options);
             } catch (MalformedURLException e) {
                 // Fehler bei ungültiger URL-Syntax
-                System.err.println("Fehler bei der Konstruktion der Selenium URL: " + seleniumGridUrl);
                 throw new RuntimeException("Ungültige Selenium Remote URL", e);
             } catch (Exception e) {
                 // Allgemeine Fehler beim Start des Remote WebDriver
-                System.err.println("Fehler beim Starten des Remote WebDriver von " + seleniumGridUrl + ": " + e.getMessage());
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
             }
         } else {
