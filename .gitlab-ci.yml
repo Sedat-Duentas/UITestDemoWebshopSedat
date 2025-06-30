@@ -36,50 +36,52 @@ test_job:
   services:
     - selenium/standalone-chrome:latest
   variables:
-    # Hostname für den Selenium-Service. SELENIUM_HOST ist immer noch der GitLab Alias
+    # Hostname für den Selenium-Service. SELENIUM_HOST ist immer noch der GitLab Alias.
+    # WICHTIG: Java Code in TestSetup nutzt jetzt SELENIUM_REMOTE_IP, nicht diesen Host.
     SELENIUM_HOST: "selenium__standalone-chrome" 
     SELENIUM_PORT: "4444" 
   script: |
     echo "Running tests using Selenium Standalone Chrome service..."
-    apk update && apk add --no-cache curl # curl ist bereits da, aber zur Sicherheit nochmal
+    # apk update und curl werden für die Statusprüfung benötigt.
+    apk update && apk add --no-cache curl
     
     # Warte, bis der Selenium-Service gestartet und bereit ist
     echo "Waiting for Selenium Grid to be ready..."
-    SELENIUM_URL="http://${SELENIUM_HOST}:${SELENIUM_PORT}/wd/hub"
-    while ! curl -sSL "${SELENIUM_URL}/status" 2>&1 | grep -q "\"ready\": true"; do
+    # Finde die IP-Adresse des Selenium-Containers und exportiere sie als Umgebungsvariable
+    SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
+    
+    if [ -z "$SERVICE_IP" ]; then
+      echo "Error: Could not resolve IP for Selenium service ${SELENIUM_HOST}. Aborting."
+      exit 1
+    fi
+    
+    # Exportiere die IP-Adresse als neue Umgebungsvariable, die der Java-Code nutzt
+    export SELENIUM_REMOTE_IP="${SERVICE_IP}"
+    echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
+
+    # Warte bis der Selenium-Service auf dieser IP bereit ist
+    SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub"
+    echo "Waiting for Selenium Grid at ${SELENIUM_REMOTE_URL_FOR_CHECK} to be ready..."
+    while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}/status" 2>&1 | grep -q "\"ready\": true"; do
       echo "Selenium Grid is not yet ready. Waiting..."
       sleep 1
     done
     echo "Selenium Grid is ready!"
 
-    # --- WICHTIGE ÄNDERUNG HIER: Finde die IP-Adresse des Selenium-Services ---
-    # Finde die IP-Adresse des Selenium-Containers und exportiere sie als Umgebungsvariable
-    # Die IP des Service-Containers ist über seinen Alias im Docker-Netzwerk erreichbar.
-    # Wir benutzen 'getent hosts' um die IP-Adresse des Hostnamens 'selenium__standalone-chrome' aufzulösen.
-    SELENIUM_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
-    
-    if [ -z "$SELENIUM_IP" ]; then
-      echo "Error: Could not resolve IP for Selenium service ${SELENIUM_HOST}. Aborting."
-      exit 1
-    fi
-    
-    # Exportiere die IP-Adresse als neue Umgebungsvariable
-    export SELENIUM_REMOTE_IP="${SELENIUM_IP}"
-    echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
-    # --- ENDE WICHTIGER ÄNDERUNG ---
-
     # Führe Tests mit Maven aus
-    # Der Java-Code muss jetzt SELENIUM_REMOTE_IP statt SELENIUM_HOST nutzen!
+    # Der Java-Code in TestSetup.java wurde angepasst, um SELENIUM_REMOTE_IP und SELENIUM_PORT zu verwenden.
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false
   artifacts:
     paths:
-      - target/allure-results
+      - target/allure-results # Die Allure-Ergebnisdateien werden hier gesammelt und an den nächsten Job übergeben.
     expire_in: 1 day
 
 generate_allure_report_job:
   stage: report # Gehört zur 'report'-Phase
   image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
-  needs: ["test_job"] 
+  needs:
+    - job: test_job # Braucht den Test-Job
+      artifacts: true # Fordert die Artefakte des Test-Jobs an (target/allure-results)
   script: |
     echo "Generating Allure report..."
     # Installiere curl, unzip und die Allure CLI manuell
@@ -91,15 +93,18 @@ generate_allure_report_job:
     ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
     
     echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    # --- WICHTIGE ÄNDERUNG HIER: Entferne --show-progress ---
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip # `--show-progress` entfernt
-    # --- ENDE WICHTIGER ÄNDERUNG ---
+    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
     chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
     export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
 
-    # Generiere den HTML-Report
+    # --- HINZUGEFÜGTER DIAGNOSE-SCHRITT ---
+    echo "Listing contents of target/allure-results (should contain test results):"
+    ls -la target/allure-results/ || echo "target/allure-results directory not found or empty."
+    # --- ENDE DIAGNOSE-SCHRITT ---
+
+    # Generiere den HTML-Report. allure generate liest von target/allure-results (das ist der Standardpfad für Artefakte)
     allure generate --clean target/allure-results -o target/allure-report
   artifacts:
     paths:
