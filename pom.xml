@@ -84,12 +84,9 @@
                     <reportFormat>brief</reportFormat>
                     <reportsDirectory>${project.build.directory}/surefire-reports</reportsDirectory>
                     <argLine>
-                        -javaagent:/opt/aspectjweaver/aspectjweaver-${aspectj.version}.jar
+                        -javaagent:/root/.m2/repository/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar
                         -Dallure.results.directory=${project.build.directory}/allure-results
                     </argLine>
-                    <systemPropertyVariables>
-                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
-                    </systemPropertyVariables>
                     <properties>
                         <property>
                             <name>junit.platform.unique-id</name>
@@ -99,10 +96,6 @@
                             <name>listener</name>
                             <value>io.qameta.allure.maven.AllureResultsWriter</value>
                         </property>
-                        <properties>
-                            <temp.placeholder>true</temp.placeholder>
-                            <maven.compiler.source>11</maven.compiler.source>
-                        </properties>
                     </properties>
                     <forkCount>1</forkCount>
                     <reuseForks>false</reuseForks>
