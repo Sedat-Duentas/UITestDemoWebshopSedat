@@ -48,6 +48,7 @@ public class AllureScreenshotExtension implements TestWatcher, AfterEachCallback
     }
 
     // Die Methode, die den Screenshot als Anhang für Allure speichert
+    // das
     @Attachment(value = "Screenshot bei Fehler", type = "image/png")
     public byte[] saveScreenshot(byte[] screenShot) {
         return screenShot;
