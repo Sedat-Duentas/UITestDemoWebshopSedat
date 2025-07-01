@@ -75,7 +75,7 @@ public class TestSetup {
     @AfterEach // Methode wird nach jedem Test ausgeführt
     public void tearDown() {
         if (driver != null) {
-            driver.quit(); // Browser schließen
+            //driver.quit(); // Der Driver wird von AllureScreenshotExtension geschlossen.
         }
     }
 }
