@@ -46,20 +46,21 @@ test_job:
     # Installiere nur curl und die notwendigen Tools für manuelle Downloads/Entpacken.
     apk update && apk add --no-cache curl wget unzip
     
-    # --- AspectJ Weaver manuell herunterladen und platzieren (für javaagent) ---
+    # --- WICHTIGE ÄNDERUNG HIER: AspectJ Weaver direkt ins Maven-Repo herunterladen ---
     ASPECTJ_VERSION="1.9.20.1" 
     ASPECTJ_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar"
     
     echo "Downloading AspectJ Weaver version ${ASPECTJ_VERSION} from: ${ASPECTJ_DOWNLOAD_URL}"
-    # --- WICHTIGE ÄNDERUNG HIER: Zielpfad für AspectJ Weaver anpassen ---
-    # Dies ist der Pfad, den die pom.xml im argLine erwartet!
-    mkdir -p /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION} # Ordner im Maven-Repo erstellen
-    wget "${ASPECTJ_DOWNLOAD_URL}" -O /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar # Herunterladen an den korrekten Ort
+    # Erstelle den spezifischen Pfad im Maven-Repository, wo das JAR erwartet wird.
+    mkdir -p /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION} 
+    # Lade das JAR genau dorthin herunter.
+    wget "${ASPECTJ_DOWNLOAD_URL}" -O /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar 
     chmod +x /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar # Ausführbar machen
     # --- ENDE AspectJ Weaver Setup ---
 
     # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
     echo "Waiting for Selenium Grid to be ready..."
+    # Löse den GitLab Service-Alias in seine tatsächliche IP-Adresse auf (kann IPv4 oder IPv6 sein).
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
     if [ -z "$SERVICE_IP" ]; then
