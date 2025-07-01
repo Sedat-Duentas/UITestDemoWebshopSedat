@@ -93,14 +93,14 @@ test_job:
     expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report # Gehört zur 'report'-Phase
-  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
+  stage: report
+  image: maven:3.9.6-eclipse-temurin-21-alpine
   needs:
-    - job: test_job # Braucht den Test-Job
-      artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'target/allure-results')
+    - job: test_job
+      artifacts: true # Fordert die Artefakte des Test-Jobs an
+  when: always # DIES MUSS AUF DER GLEICHEN EBENE WIE 'stage' UND 'image' SEIN!
   script: |
     echo "Generating Allure report..."
-    # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
     ALLURE_VERSION="2.27.0" 
@@ -110,17 +110,16 @@ generate_allure_report_job:
     wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
-    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
-    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
+    chmod +x /opt/allure-framework/allure-*/bin/allure
+    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH"
 
     echo "Listing contents of ${CI_PROJECT_DIR}/target/allure-results (should contain test results):"
     ls -la ${CI_PROJECT_DIR}/target/allure-results/ || echo "${CI_PROJECT_DIR}/target/allure-results directory not found or empty."
 
-    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Standard-Pfad, wo Artefakte entpackt werden.
     allure generate --clean ${CI_PROJECT_DIR}/target/allure-results -o target/allure-report
   artifacts:
     paths:
-      - target/allure-report # Speichert den generierten HTML-Report
+      - target/allure-report
     expire_in: 1 week
 
 pages:
