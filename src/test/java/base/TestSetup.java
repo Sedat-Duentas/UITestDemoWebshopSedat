@@ -6,9 +6,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
+import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import java.net.URL;
 import java.net.MalformedURLException;
+import java.time.Duration;
 
 /**
  * Basisklasse für alle UI-Tests. Kapselt die Browserinitialisierung und -beendigung.
@@ -49,19 +51,27 @@ public class TestSetup {
 
             // RemoteWebDriver mit der konfigurierten URL initialisieren
             try {
-                driver = new RemoteWebDriver(new URL(seleniumGridUrl), options);
+                DesiredCapabilities capabilities = new DesiredCapabilities();
+                capabilities.setCapability(ChromeOptions.CAPABILITY, options);
+
+                // Setzen des Session-Timeout in den Capabilities
+                capabilities.setCapability("se:sessionTimeout", 60000); // 60 Sekunden in Millisekunden
+                capabilities.setCapability("se:nodeRequestTimeout", 120000); // 120 Sekunden
+
+                driver = new RemoteWebDriver(new URL(seleniumGridUrl), capabilities);
+                // --- ENDE WICHTIGER ÄNDERUNG ---
             } catch (MalformedURLException e) {
-                // Fehler bei ungültiger URL-Syntax
-                throw new RuntimeException("Ungültige Selenium Remote URL", e);
+                throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
             } catch (Exception e) {
-                // Allgemeine Fehler beim Start des Remote WebDriver
-                throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen", e);
+                throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
         } else {
             // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
             WebDriverManager.chromedriver().setup(); // Lädt/konfiguriert den ChromeDriver automatisch
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
+
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10)); // Warte bis zu 10 Sekunden auf Elemente
 
         driver.manage().window().maximize();
         driver.get(BASE_URL);
@@ -76,7 +86,8 @@ public class TestSetup {
     @AfterEach // Methode wird nach jedem Test ausgeführt
     public void tearDown() {
         if (driver != null) {
-            //driver.quit(); // Der Driver wird von AllureScreenshotExtension geschlossen.
+            driver.quit();
+            driver = null;
         }
     }
 }
