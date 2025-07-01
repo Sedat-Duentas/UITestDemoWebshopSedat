@@ -51,14 +51,15 @@ test_job:
     ASPECTJ_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar"
     
     echo "Downloading AspectJ Weaver version ${ASPECTJ_VERSION} from: ${ASPECTJ_DOWNLOAD_URL}"
-    mkdir -p /opt/aspectjweaver # Ordner erstellen, wo das JAR liegen soll
-    wget "${ASPECTJ_DOWNLOAD_URL}" -O /opt/aspectjweaver/aspectjweaver-${ASPECTJ_VERSION}.jar # Herunterladen an den festen Ort
-    chmod +x /opt/aspectjweaver/aspectjweaver-${ASPECTJ_VERSION}.jar # Ausführbar machen (wichtig für javaagent)
+    # --- WICHTIGE ÄNDERUNG HIER: Zielpfad für AspectJ Weaver anpassen ---
+    # Dies ist der Pfad, den die pom.xml im argLine erwartet!
+    mkdir -p /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION} # Ordner im Maven-Repo erstellen
+    wget "${ASPECTJ_DOWNLOAD_URL}" -O /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar # Herunterladen an den korrekten Ort
+    chmod +x /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar # Ausführbar machen
     # --- ENDE AspectJ Weaver Setup ---
 
     # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
     echo "Waiting for Selenium Grid to be ready..."
-    # Löse den GitLab Service-Alias in seine tatsächliche IP-Adresse auf (kann IPv4 oder IPv6 sein).
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
     if [ -z "$SERVICE_IP" ]; then
@@ -84,25 +85,21 @@ test_job:
     echo "Selenium Grid is ready!"
 
     # Führe Tests mit Maven aus. Allure-Ergebnisse werden ins Standard 'target/allure-results' geschrieben.
-    # Der Java-Code in TestSetup.java wurde angepasst, um SELENIUM_REMOTE_IP und SELENIUM_PORT zu verwenden.
-    # Der javaagent-Pfad ist nun im pom.xml korrekt auf /opt/aspectjweaver festgelegt.
-    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=${CI_PROJECT_DIR}/target/allure-results # <-- HIER ABSOLUTER PFAD ZU target/allure-results
+    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=${CI_PROJECT_DIR}/target/allure-results
   artifacts:
     paths:
       - target/allure-results # Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
     expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report
-  image: maven:3.9.6-eclipse-temurin-21-alpine
+  stage: report # Gehört zur 'report'-Phase
+  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
   needs:
-    - job: test_job
-      artifacts: true
-  # --- WICHTIGE ÄNDERUNG HIER: Job auch bei Misserfolg ausführen ---
-  when: always # Dies stellt sicher, dass dieser Job immer ausgeführt wird, auch wenn vorherige Jobs fehlschlagen
-  # --- ENDE WICHTIGER ÄNDERUNG ---
+    - job: test_job # Braucht den Test-Job
+      artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'target/allure-results')
   script: |
     echo "Generating Allure report..."
+    # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
     ALLURE_VERSION="2.27.0" 
@@ -112,16 +109,17 @@ generate_allure_report_job:
     wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
-    chmod +x /opt/allure-framework/allure-*/bin/allure
-    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH"
+    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
+    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
 
-    echo "Listing contents of target/allure-results (should contain test results):"
-    ls -la target/allure-results/ || echo "target/allure-results directory not found or empty."
+    echo "Listing contents of ${CI_PROJECT_DIR}/target/allure-results (should contain test results):"
+    ls -la ${CI_PROJECT_DIR}/target/allure-results/ || echo "${CI_PROJECT_DIR}/target/allure-results directory not found or empty."
 
-    allure generate --clean target/allure-results -o target/allure-report
+    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Standard-Pfad, wo Artefakte entpackt werden.
+    allure generate --clean ${CI_PROJECT_DIR}/target/allure-results -o target/allure-report
   artifacts:
     paths:
-      - target/allure-report
+      - target/allure-report # Speichert den generierten HTML-Report
     expire_in: 1 week
 
 pages:
