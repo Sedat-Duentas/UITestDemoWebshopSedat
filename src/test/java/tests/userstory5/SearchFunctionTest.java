@@ -4,11 +4,20 @@ import base.TestSetup;
 import org.junit.jupiter.api.Test;
 import pages.HomePage;
 import pages.SearchResultsPage;
+import utils.AllureScreenshotExtension;
+import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
 import java.util.List;
 
+//import io.qameta.allure.Attachment;
+//import org.junit.jupiter.api.AfterEach;
+//import org.openqa.selenium.OutputType;
+//import org.openqa.selenium.TakesScreenshot;
+
 import static org.junit.jupiter.api.Assertions.*;
+
+@ExtendWith(AllureScreenshotExtension.class)
 
 /**
  * Testfall für User Story 5:
@@ -18,6 +27,7 @@ import static org.junit.jupiter.api.Assertions.*;
  * - Die Suche liefert relevante Treffer (z.B. Eingabe „laptop“ zeigt passende Produkte).
  * - Die Ergebnisseite ist nach Relevanz sortiert.
  */
+
 public class SearchFunctionTest extends TestSetup {
 
     @Test
@@ -25,7 +35,8 @@ public class SearchFunctionTest extends TestSetup {
         // Arrange
         HomePage homePage = new HomePage(driver);
         String searchTerm = "diamond"; // Definiert den Suchbegriff, den wir im Test verwenden werden.
-        String expectedProduct = "Black & White Diamond Heart"; // Das spezifische Produkt, das wir in den Suchergebnissen erwarten.
+        //String expectedProduct = "Black & White Diamond Heart"; // Das spezifische Produkt, das wir in den Suchergebnissen erwarten.
+        String expectedProduct = "NonExistent Diamond Product"; // Das spezifische Produkt, das wir NICHT in den Suchergebnissen erwarten.
 
         // Die 'expectedSortedProducts'-Liste definiert die exakte Reihenfolge der Produkttitel, die wir als "relevant" betrachten und die am Anfang der Suchergebnisse erscheinen sollten.
         List<String> expectedSortedProducts = Arrays.asList(

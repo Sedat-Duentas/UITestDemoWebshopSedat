@@ -67,6 +67,11 @@ public class TestSetup {
         driver.get(BASE_URL);
     }
 
+    // Getter-Methode für JUnit Extensions wie AllureScreenshotExtension, um auf den Driver zuzugreifen.
+    public WebDriver getDriver() {
+        return driver;
+    }
+
     @AfterEach // Methode wird nach jedem Test ausgeführt
     public void tearDown() {
         if (driver != null) {
