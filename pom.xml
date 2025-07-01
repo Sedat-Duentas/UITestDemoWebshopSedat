@@ -87,6 +87,9 @@
                         -javaagent:/root/.m2/repository/org/aspectj/aspectjweaver/${aspectj.version}/aspectjweaver-${aspectj.version}.jar
                         -Dallure.results.directory=${project.build.directory}/allure-results
                     </argLine>
+                    <systemPropertyVariables>
+                        <allure.results.directory>${project.build.directory}/allure-results</allure.results.directory>
+                    </systemPropertyVariables>
                     <properties>
                         <property>
                             <name>junit.platform.unique-id</name>
