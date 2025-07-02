@@ -71,7 +71,7 @@ public class TestSetup {
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
 
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10)); // Warte bis zu 10 Sekunden auf Elemente
+        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10)); // Warte bis zu 10 Sekunden auf Elementen
 
         driver.manage().window().maximize();
         driver.get(BASE_URL);
