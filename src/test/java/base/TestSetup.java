@@ -86,8 +86,8 @@ public class TestSetup {
     @AfterEach // Methode wird nach jedem Test ausgeführt
     public void tearDown() {
         if (driver != null) {
-            driver.quit();
-            driver = null;
+            // driver.quit();
+            // driver = null;
         }
     }
 }

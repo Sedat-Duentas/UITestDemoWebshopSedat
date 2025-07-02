@@ -3,7 +3,7 @@ package utils;
 import io.qameta.allure.Attachment;
 import org.junit.jupiter.api.extension.ExtensionContext;
 import org.junit.jupiter.api.extension.TestWatcher;
-// import org.junit.jupiter.api.extension.AfterEachCallback; // <-- DIESEN IMPORT ENTFERNEN!
+import org.junit.jupiter.api.extension.AfterEachCallback; // WICHTIG: Import für AfterEachCallback
 import org.openqa.selenium.OutputType;
 import org.openqa.selenium.TakesScreenshot;
 import org.openqa.selenium.WebDriver;
@@ -13,9 +13,9 @@ import java.util.Optional;
 
 /**
  * JUnit 5 Extension zur automatischen Erstellung von Screenshots bei fehlerhaften Tests.
- * Diese Extension macht KEINEN driver.quit() mehr.
+ * Kümmert sich auch um das Schließen des WebDrivers NACH dem Screenshot bei Fehlern.
  */
-public class AllureScreenshotExtension implements TestWatcher { // AfterEachCallback ENTFERNT
+public class AllureScreenshotExtension implements TestWatcher, AfterEachCallback { // BEIDE INTERFACES IMPLEMENTIEREN
 
     // Diese Methode wird aufgerufen, wenn ein Test fehlschlägt
     @Override
@@ -24,10 +24,7 @@ public class AllureScreenshotExtension implements TestWatcher { // AfterEachCall
         if (instance.isPresent() && instance.get() instanceof TestSetup) {
             WebDriver driver = ((TestSetup) instance.get()).getDriver(); // Zugriff auf den Driver über den Getter
             // Nur Screenshot machen, wenn der Driver nicht null und aktiv ist
-            // Die NoSuchSessionException, die wir vorher sahen, kommt, wenn driver.quit() zu früh aufgerufen wird.
-            // Der einzige Weg, dies zu beheben, wenn driver.quit() im @AfterEach bleibt,
-            // ist, den Timeout-Wert des RemoteWebDriver zu erhöhen.
-            if (driver != null && driver instanceof TakesScreenshot) {
+            if (driver != null && driver instanceof TakesScreenshot) { // Sicherstellen, dass es ein Screenshot-fähiger Driver ist
                 try {
                     saveScreenshot(((TakesScreenshot) driver).getScreenshotAs(OutputType.BYTES));
                 } catch (Exception e) {
@@ -37,19 +34,19 @@ public class AllureScreenshotExtension implements TestWatcher { // AfterEachCall
         }
     }
 
-    // --- WICHTIGE ÄNDERUNG HIER: afterEach() METHODE KOMPLETT ENTFERNEN! ---
-    // Sie wird nicht mehr benötigt, da driver.quit() wieder in TestSetup ist.
-    // @Override
-    // public void afterEach(ExtensionContext context) throws Exception {
-    //     Optional<Object> instance = context.getTestInstance();
-    //     if (instance.isPresent() && instance.get() instanceof TestSetup) {
-    //         WebDriver driver = ((TestSetup) instance.get()).getDriver();
-    //         if (driver != null) {
-    //             driver.quit();
-    //         }
-    //     }
-    // }
-    // --- ENDE WICHTIGER ÄNDERUNG ---
+    // Diese Methode wird nach jedem Test ausgeführt (erfolgreich oder fehlerhaft).
+    // Sie wird NACH testFailed() aufgerufen.
+    @Override
+    public void afterEach(ExtensionContext context) throws Exception {
+        Optional<Object> instance = context.getTestInstance();
+        if (instance.isPresent() && instance.get() instanceof TestSetup) {
+            WebDriver driver = ((TestSetup) instance.get()).getDriver();
+            if (driver != null) {
+                driver.quit(); // <-- DER DRIVER WIRD HIER GESCHLOSSEN!
+                driver = null; // Den Driver auch hier auf null setzen
+            }
+        }
+    }
 
     // Die Methode, die den Screenshot als Anhang für Allure speichert
     @Attachment(value = "Screenshot bei Fehler", type = "image/png")
