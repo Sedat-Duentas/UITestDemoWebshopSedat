@@ -1,131 +1,56 @@
-# .gitlab-ci.yml
-
-# Definiert das Docker-Image, das für alle Jobs in dieser Pipeline verwendet wird.
-image: maven:3.9.6-eclipse-temurin-21-alpine
-
-# Definiert die verschiedenen Phasen (Stages) unserer Pipeline.
+# Definierte Stages (Phasen) deiner CI/CD-Pipeline
 stages:
   - build
   - test
   - report
-  - deploy_report # Für GitLab Pages Hosting des Allure Reports
 
-# Definition von Umgebungsvariablen, die in den Jobs verwendet werden können.
-variables:
-  MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=WARN -Dorg.slf4j.simpleLogger.showLogFileName=false"
-  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
-  # Erhöhe das Service-Timeout für den Runner.
-  GITLAB_ANY_SERVICE_TIMEOUT: 120 # Timeout in Sekunden (2 Minuten)
-
-# Definiert einen Cache für Maven-Abhängigkeiten.
-cache:
-  paths:
-    - .m2/repository
-
+# Job: Build-Phase (Kompilieren des Projekts)
 build_job:
-  stage: build # Gehört zur 'build'-Phase
-  script: # Die Befehle, die ausgeführt werden sollen
+  stage: build
+  image: maven:3.9.6-eclipse-temurin-17-focal # Nutze ein Maven-Image mit Java 17 (oder 11, passend zu deiner pom.xml)
+  script:
     - echo "Building the project..."
-    - mvn $MAVEN_CLI_OPTS compile
-  artifacts: # Was dieser Job als "Ergebnis" für nachfolgende Jobs speichert
+    - mvn clean compile -DskipTests # Kompiliert das Projekt, überspringt Tests in dieser Phase
+  artifacts:
     paths:
-      - target/classes
-      - target/test-classes
-    expire_in: 1 hour
+      - target/ # Speichert das target-Verzeichnis als Artefakt (optional, aber nützlich)
+    expire_in: 1 day # Artefakte nach einem Tag löschen
 
+# Job: Test-Phase (Ausführen der Selenium-Tests)
 test_job:
   stage: test
-  services:
-    - selenium/standalone-chrome:4.20.0
-  variables:
-    SELENIUM_HOST: "selenium__standalone-chrome"
-    SELENIUM_PORT: "4444"
-  script: |
-    echo "Running tests using Selenium Standalone Chrome service..."
-    apk update && apk add --no-cache curl wget unzip
-    
-    ASPECTJ_VERSION="1.9.20.1" 
-    ASPECTJ_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar"
-    
-    echo "Downloading AspectJ Weaver version ${ASPECTJ_VERSION} from: ${ASPECTJ_DOWNLOAD_URL}"
-    mkdir -p /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION} 
-    wget "${ASPECTJ_DOWNLOAD_URL}" -O /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar 
-    chmod +x /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar
-    
-    echo "Waiting for Selenium Grid to be ready..."
-    SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
-    
-    if [ -z "$SERVICE_IP" ]; then
-      echo "Error: Could not resolve IP for Selenium service ${SELENIUM_HOST}. Aborting."
-      exit 1
-    fi
-    
-    export SELENIUM_REMOTE_IP="${SERVICE_IP}"
-    echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
-
-    SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub/status"
-    if [[ "${SELENIUM_REMOTE_IP}" == *:* ]]; then
-      SELENIUM_REMOTE_URL_FOR_CHECK="http://[${SELENIUM_REMOTE_IP}]:${SELENIUM_PORT}/wd/hub/status"
-    fi
-
-    echo "Waiting for Selenium Grid at ${SELENIUM_REMOTE_URL_FOR_CHECK} to be ready (curl check)..."
-    while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}" 2>&1 | grep -q "\"ready\": true"; do
-      echo "Selenium Grid is not yet ready. Waiting..."
-      sleep 1
-    done
-    echo "Selenium Grid is ready!"
-
-    mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=${CI_PROJECT_DIR}/target/allure-results
+  image: maven:3.9.6-eclipse-temurin-17-focal # Wieder Maven/Java Image
+  services: # Hier definieren wir die Dienste, die für den Test notwendig sind
+    - name: selenium/standalone-chrome:latest # Nutze ein vorgefertigtes Selenium Standalone Chrome Docker Image
+      alias: selenium-hub # Der Hostname, unter dem der Selenium Hub erreichbar ist
+  variables: # Umgebungsvariablen für deine TestSetup-Klasse
+    SELENIUM_REMOTE_IP: selenium-hub # IP/Hostname des Selenium Hubs (der Alias von oben)
+    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid
+    MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode" # Optional: Für schnellere Maven-Downloads
+    MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository" # Optional: Für schnelleren Maven-Cache
+  script:
+    - echo "Running Selenium tests..."
+    - mvn test -Dsurefire.rerunFailingTestsCount=1 # Führt Tests aus, optional: fehlerhafte Tests einmal wiederholen
+    - echo "Tests finished."
   artifacts:
     paths:
-      - target/allure-results # Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
-    # --- WICHTIGE ÄNDERUNG HIER: Artefakte auch bei Fehlschlag hochladen ---
-    when: always # Dies stellt sicher, dass Artefakte hochgeladen werden, auch wenn der Job fehlschlägt
-    # --- ENDE WICHTIGER ÄNDERUNG ---
+      - target/allure-results/ # Speichert die Allure-Ergebnisse als Artefakte
     expire_in: 1 day
 
-generate_allure_report_job:
-  stage: report # Gehört zur 'report'-Phase
-  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
-  needs:
-    - job: test_job # Braucht den Test-Job
-      artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'allure-results')
-  script: |
-    echo "Generating Allure report..."
-    # Installiere curl, unzip und wget für die Allure CLI Installation
-    apk update && apk add --no-cache curl unzip wget
-    
-    ALLURE_VERSION="2.27.0" 
-    ALLURE_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip"
-    
-    echo "Downloading Allure CLI version ${ALLURE_VERSION} from: ${ALLURE_DOWNLOAD_URL}"
-    wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
-    
-    unzip /tmp/allure-commandline.zip -d /opt/allure-framework
-    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
-    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
-
-    # --- HINZUGEFÜGTER DIAGNOSE-SCHRITT ---
-    echo "Listing contents of allure-results (should contain test results):"
-    ls -la allure-results/ || echo "allure-results directory not found or empty."
-    # --- ENDE DIAGNOSE-SCHRITT ---
-
-    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Root-Ordner 'allure-results'.
-    allure generate --clean allure-results -o target/allure-report
-  artifacts:
-    paths:
-      - target/allure-report # Speichert den generierten HTML-Report
-    expire_in: 1 week
-
-pages:
-  stage: deploy_report
-  needs: ["generate_allure_report_job"]
+# Job: Report-Phase (Generieren und Veröffentlichen der Allure Reports)
+report_job:
+  stage: report
+  image: maven:3.9.6-eclipse-temurin-17-focal # Oder ein eigenes Image mit Allure CLI, falls Maven nicht reicht
   script:
-    - echo "Deploying Allure report to GitLab Pages..."
-    - mv target/allure-report/ public
+    - echo "Generating Allure Report..."
+    # Da Allure Maven Plugin in pom.xml ist, kann man es direkt ausführen:
+    - mvn allure:report # Generiert den Allure Report
+    - echo "Allure Report generated."
   artifacts:
     paths:
-      - public
-  only:
-    - master
-    - main
+      - target/site/allure-maven-plugin/ # Pfad zum generierten Allure Report
+    expose_as: 'Allure Report' # Macht den Link zum Report in der GitLab UI sichtbar
+    expire_in: 1 week # Bericht für eine Woche aufbewahren
+  when: always # Diesen Job immer ausführen, auch wenn Tests fehlschlagen
+  dependencies:
+    - test_job # Abhängigkeit vom test_job, um dessen Artefakte zu nutzen
