@@ -1,8 +1,7 @@
 # Definierte Stages (Phasen) deiner CI/CD-Pipeline
 stages:
   - build
-  - test
-  - report
+  - test # Der Report Stage wird entfernt
 
 # Job: Build-Phase (Kompilieren des Projekts)
 build_job:
@@ -26,32 +25,14 @@ test_job:
   variables: # Umgebungsvariablen für deine TestSetup-Klasse
     SELENIUM_REMOTE_IP: selenium-hub # IP/Hostname des Selenium Hubs (der Alias von oben)
     SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid
-    MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode" # Optional: Für schnellere Maven-Downloads
-    MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository" # Optional: Für schnelleren Maven-Cache
+    # MAVEN_CLI_OPTS und MAVEN_OPTS kannst du lassen oder entfernen, sind optional.
+    # MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
+    # MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
   script:
     - echo "Running Selenium tests..."
-    - mvn test -Dsurefire.rerunFailingTestsCount=1 # Führt Tests aus, optional: fehlerhafte Tests einmal wiederholen
+    - mvn test -Dsurefire.rerunFailingTestsCount=1 # Führt Tests aus
     - echo "Tests finished."
   artifacts:
     paths:
-      - target/allure-results/ # Speichert die Allure-Ergebnisse als Artefakte
-    expire_in: 1 day
-
-# Job: Report-Phase (Generieren und Veröffentlichen der Allure Reports)
-report_job:
-  stage: report
-  image: maven:3.9.6-eclipse-temurin-17-focal
-  script:
-    - echo "Generating Allure Report..."
-    - mvn org.apache.maven.plugins:maven-clean-plugin:clean
-    # Dies ist die KORRIGIERTE Zeile mit der festen Allure-Version
-    - mvn io.qameta.allure:allure-maven:2.22.0:report
-    - echo "Allure Report generated."
-  artifacts:
-    paths:
-      - target/site/allure-maven-plugin/
-    expose_as: 'Allure Report'
-    expire_in: 1 week
-  when: always
-  dependencies:
-    - test_job
+      - target/allure-results/ # Diese Artefakte sind SEHR WICHTIG! Sie enthalten die Rohdaten für den Allure Report.
+    expire_in: 1 day # Behalte diese Artefakte für den lokalen Download
