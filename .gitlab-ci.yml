@@ -40,18 +40,18 @@ test_job:
 # Job: Report-Phase (Generieren und Veröffentlichen der Allure Reports)
 report_job:
   stage: report
-  image: maven:3.9.6-eclipse-temurin-17-focal # Oder ein eigenes Image mit Allure CLI, falls Maven nicht reicht
+  image: maven:3.9.6-eclipse-temurin-17-focal
   script:
     - echo "Generating Allure Report..."
-    # NEU: Maven den vollständigen Namen des Plugins geben, damit es gefunden wird
-    - mvn org.apache.maven.plugins:maven-clean-plugin:clean # Führe einen Clean aus, bevor der Report generiert wird
-    - mvn io.qameta.allure:allure-maven:${allure.maven.version}:report # Expliziter Aufruf mit GroupId und Version
+    - mvn org.apache.maven.plugins:maven-clean-plugin:clean
+    # Dies ist die angepasste Zeile
+    - mvn "io.qameta.allure:allure-maven:${allure.maven.version}:report"
     - echo "Allure Report generated."
   artifacts:
     paths:
-      - target/site/allure-maven-plugin/ # Pfad zum generierten Allure Report
-    expose_as: 'Allure Report' # Macht den Link zum Report in der GitLab UI sichtbar
-    expire_in: 1 week # Bericht für eine Woche aufbewahren
-  when: always # Diesen Job immer ausführen, auch wenn Tests fehlschlagen
+      - target/site/allure-maven-plugin/
+    expose_as: 'Allure Report'
+    expire_in: 1 week
+  when: always
   dependencies:
-    - test_job # Abhängigkeit vom test_job, um dessen Artefakte zu nutzen
+    - test_job
