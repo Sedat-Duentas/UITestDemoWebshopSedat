@@ -64,10 +64,6 @@
     </dependencies>
 
     <build>
-        <pluginGroups>
-            <pluginGroup>io.qameta.allure</pluginGroup>
-        </pluginGroups>
-
         <plugins>
             <plugin>
                 <groupId>org.apache.maven.plugins</groupId>

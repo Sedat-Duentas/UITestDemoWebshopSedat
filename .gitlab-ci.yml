@@ -43,8 +43,9 @@ report_job:
   image: maven:3.9.6-eclipse-temurin-17-focal # Oder ein eigenes Image mit Allure CLI, falls Maven nicht reicht
   script:
     - echo "Generating Allure Report..."
-    # Da Allure Maven Plugin in pom.xml ist, kann man es direkt ausführen:
-    - mvn allure:report # Generiert den Allure Report
+    # NEU: Maven den vollständigen Namen des Plugins geben, damit es gefunden wird
+    - mvn org.apache.maven.plugins:maven-clean-plugin:clean # Führe einen Clean aus, bevor der Report generiert wird
+    - mvn io.qameta.allure:allure-maven:${allure.maven.version}:report # Expliziter Aufruf mit GroupId und Version
     - echo "Allure Report generated."
   artifacts:
     paths:
