@@ -44,8 +44,8 @@ report_job:
   script:
     - echo "Generating Allure Report..."
     - mvn org.apache.maven.plugins:maven-clean-plugin:clean
-    # Dies ist die angepasste Zeile
-    - mvn "io.qameta.allure:allure-maven:${allure.maven.version}:report"
+    # Dies ist die KORRIGIERTE Zeile mit der festen Allure-Version
+    - mvn io.qameta.allure:allure-maven:2.22.0:report
     - echo "Allure Report generated."
   artifacts:
     paths:
