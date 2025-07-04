@@ -33,25 +33,32 @@ build_job:
       - target/test-classes
     expire_in: 1 hour
 
+# .gitlab-ci.yml (nur der test_job, die anderen Jobs bleiben gleich)
+
 test_job:
-  stage: test
-  services:
-    - selenium/standalone-chrome:4.20.0 
+  stage: test # Gehört zur 'test'-Phase
+  services: # Definiert den Selenium Chrome Standalone Service, der parallel gestartet wird
+    - selenium/standalone-chrome:4.20.0 # Spezifische und hoffentlich stabile Version
   variables:
-    SELENIUM_HOST: "selenium__standalone-chrome" 
-    SELENIUM_PORT: "4444" 
-  script: |
+    # Der Hostname unter dem der Selenium-Service im Docker-Netzwerk des Runners erreichbar ist.
+    SELENIUM_HOST: "selenium__standalone-chrome"
+    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid/Standalone
+  script: | # Mehrzeiliger Shell-Skript
     echo "Running tests using Selenium Standalone Chrome service..."
+    # Installiere nur curl und die notwendigen Tools für manuelle Downloads/Entpacken.
     apk update && apk add --no-cache curl wget unzip
     
+    # --- WICHTIGE ÄNDERUNG HIER: AspectJ Weaver nach /tmp herunterladen ---
     ASPECTJ_VERSION="1.9.20.1" 
     ASPECTJ_DOWNLOAD_URL="https://repo.maven.apache.org/maven2/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar"
     
     echo "Downloading AspectJ Weaver version ${ASPECTJ_VERSION} from: ${ASPECTJ_DOWNLOAD_URL}"
-    mkdir -p /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION} 
-    wget "${ASPECTJ_DOWNLOAD_URL}" -O /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar 
-    chmod +x /root/.m2/repository/org/aspectj/aspectjweaver/${ASPECTJ_VERSION}/aspectjweaver-${ASPECTJ_VERSION}.jar
-    
+    # Lege das JAR in /tmp ab, wo es sicher verfügbar sein sollte.
+    wget "${ASPECTJ_DOWNLOAD_URL}" -O /tmp/aspectjweaver-${ASPECTJ_VERSION}.jar 
+    chmod +x /tmp/aspectjweaver-${ASPECTJ_VERSION}.jar # Ausführbar machen
+    # --- ENDE AspectJ Weaver Setup ---
+
+    # Warte, bis der Selenium Grid Service gestartet und bereit ist, Anfragen zu akzeptieren.
     echo "Waiting for Selenium Grid to be ready..."
     SERVICE_IP=$(getent hosts ${SELENIUM_HOST} | awk '{ print $1 ; exit }')
     
@@ -60,9 +67,11 @@ test_job:
       exit 1
     fi
     
+    # Exportiere die aufgelöste IP-Adresse als Umgebungsvariable, die der Java-Code nutzt.
     export SELENIUM_REMOTE_IP="${SERVICE_IP}"
     echo "Resolved Selenium IP: ${SELENIUM_REMOTE_IP}"
 
+    # Führe einen Health Check durch, um zu warten, bis der Grid wirklich ready ist.
     SELENIUM_REMOTE_URL_FOR_CHECK="http://${SELENIUM_REMOTE_IP}:${SELENIUM_PORT}/wd/hub/status"
     if [[ "${SELENIUM_REMOTE_IP}" == *:* ]]; then
       SELENIUM_REMOTE_URL_FOR_CHECK="http://[${SELENIUM_REMOTE_IP}]:${SELENIUM_PORT}/wd/hub/status"
@@ -72,27 +81,27 @@ test_job:
     while ! curl -sSL "${SELENIUM_REMOTE_URL_FOR_CHECK}" 2>&1 | grep -q "\"ready\": true"; do
       echo "Selenium Grid is not yet ready. Waiting..."
       sleep 1
-    done
+    }
     echo "Selenium Grid is ready!"
 
+    # Führe Tests mit Maven aus. Allure-Ergebnisse werden ins Standard 'target/allure-results' geschrieben.
     mvn $MAVEN_CLI_OPTS test -Dsurefire.useFile=false -Dallure.results.directory=${CI_PROJECT_DIR}/target/allure-results
   artifacts:
     paths:
       - target/allure-results # Der Allure-Ergebnisordner, der an den nächsten Job übergeben wird.
-    # --- WICHTIGE ÄNDERUNG HIER: Artefakte auch bei Fehlschlag hochladen ---
     when: always # Dies stellt sicher, dass Artefakte hochgeladen werden, auch wenn der Job fehlschlägt
-    # --- ENDE WICHTIGER ÄNDERUNG ---
     expire_in: 1 day
 
 generate_allure_report_job:
-  stage: report
-  image: maven:3.9.6-eclipse-temurin-21-alpine
+  stage: report # Gehört zur 'report'-Phase
+  image: maven:3.9.6-eclipse-temurin-21-alpine # Verwende das gleiche Basis-Image wie für den Test-Job
   needs:
-    - job: test_job
-      artifacts: true # Fordert die Artefakte des Test-Jobs an
-  when: always # DIES MUSS AUF DER GLEICHEN EBENE WIE 'stage' UND 'image' SEIN!
+    - job: test_job # Braucht den Test-Job
+      artifacts: true # Fordert die Artefakte des Test-Jobs an (dies ist jetzt 'target/allure-results')
+  when: always # Dies stellt sicher, dass dieser Job immer ausgeführt wird, auch wenn vorherige Jobs fehlschlagen
   script: |
     echo "Generating Allure report..."
+    # Installiere curl, unzip und wget für die Allure CLI Installation
     apk update && apk add --no-cache curl unzip wget
     
     ALLURE_VERSION="2.27.0" 
@@ -102,16 +111,17 @@ generate_allure_report_job:
     wget "${ALLURE_DOWNLOAD_URL}" -O /tmp/allure-commandline.zip
     
     unzip /tmp/allure-commandline.zip -d /opt/allure-framework
-    chmod +x /opt/allure-framework/allure-*/bin/allure
-    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH"
+    chmod +x /opt/allure-framework/allure-*/bin/allure # Mach das Allure Binary ausführbar
+    export PATH="/opt/allure-framework/allure-${ALLURE_VERSION}/bin:$PATH" # Füge Allure zum PATH hinzu
 
     echo "Listing contents of ${CI_PROJECT_DIR}/target/allure-results (should contain test results):"
     ls -la ${CI_PROJECT_DIR}/target/allure-results/ || echo "${CI_PROJECT_DIR}/target/allure-results directory not found or empty."
 
+    # Generiere den HTML-Report. allure generate liest jetzt direkt aus dem Standard-Pfad, wo Artefakte entpackt werden.
     allure generate --clean ${CI_PROJECT_DIR}/target/allure-results -o target/allure-report
   artifacts:
     paths:
-      - target/allure-report
+      - target/allure-report # Speichert den generierten HTML-Report
     expire_in: 1 week
 
 pages:

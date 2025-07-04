@@ -63,6 +63,7 @@ public class TestSetup {
             } catch (MalformedURLException e) {
                 throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
             } catch (Exception e) {
+                System.err.println("CRITICAL ERROR: Failed to connect to Selenium Grid at " + seleniumGridUrl + " - " + e.getMessage());
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
         } else {
