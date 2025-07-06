@@ -40,20 +40,26 @@ test_job:
 
 report_job:
   stage: report
-  image: maven:3.9.6-eclipse-temurin-17-focal # Dieses Image hat Maven, was für allure:report ausreicht.
+  image: maven:3.9.6-eclipse-temurin-17-focal # Dieses Image sollte passen
   script:
     - echo "Generating Allure Report..."
-    # Sicherstellen, dass das Allure Commandline Tool verfügbar ist, falls mvn allure:report nicht funktioniert.
-    # Alternativ könnten wir hier das Allure CLI manuell herunterladen und ausführen.
-    # Aber wir versuchen es zuerst mit dem Maven Plugin, da es in der pom.xml definiert ist.
-    # KEINE ${allure.maven.version} mehr, da Bash es nicht mag. Fester Wert!
-    - mvn io.qameta.allure:allure-maven:2.22.0:report
+    # 1. Allure Commandline Tool herunterladen und entpacken
+    # Verwenden wir die gleiche Allure-Version, die auch in der pom.xml für JUnit5 definiert ist,
+    # um Konsistenz zu gewährleisten (2.27.0). Die Maven-Plugin-Version 2.22.0 war das Problemkind.
+    - ALLURE_VERSION="2.27.0" # Verwenden der Allure-Version aus allure-junit5
+    - curl -o allure-commandline.zip -L https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip
+    - unzip allure-commandline.zip
+    - export PATH=$PATH:$(pwd)/allure-2.27.0/bin # Pfad zum Allure-Executable hinzufügen
+
+    # 2. Allure Report generieren
+    # Hier verwenden wir das heruntergeladene Allure CLI anstatt des Maven Plugins
+    - allure generate target/allure-results --clean -o target/allure-report
     - echo "Allure Report generated."
   artifacts:
     paths:
-      - target/site/allure-maven-plugin/ # Dieser Pfad enthält den generierten HTML-Report
-    expose_as: 'Allure Report' # Macht den Link in der GitLab UI sichtbar
-    expire_in: 1 week # Den Bericht für eine Woche aufbewahren
-  when: always # Diesen Job immer ausführen, auch wenn Tests fehlschlagen
+      - target/site/allure-maven-plugin/ # Pfad zum generierten Allure Report
+    expose_as: 'Allure Report'
+    expire_in: 1 week
+  when: always
   dependencies:
-    - test_job # Abhängigkeit vom test_job, um dessen Artefakte zu nutzen
+    - test_job
