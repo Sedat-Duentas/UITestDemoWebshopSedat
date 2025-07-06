@@ -37,6 +37,7 @@ public class TestSetup {
 
         // Entscheidet, ob Tests lokal oder in CI/CD ausgeführt werden
         if (seleniumRemoteIp != null && !seleniumRemoteIp.isEmpty()) {
+
             // CI/CD-Umgebung: RemoteWebDriver nutzen
             options.addArguments("--headless"); // Fügt Headless-Argument nur für CI hinzu
             String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub"; // URL für Selenium Grid aufbauen
@@ -48,16 +49,16 @@ public class TestSetup {
 
                 // Setzen des Session-Timeout in den Capabilities
                 capabilities.setCapability("se:sessionTimeout", 60000); // 60 Sekunden in Millisekunden
-                capabilities.setCapability("se:nodeRequestTimeout", 120000); // 120 Sekunden
+                capabilities.setCapability("se:nodeRequestTimeout", 60000); // 120 Sekunden
 
                 driver = new RemoteWebDriver(new URL(seleniumGridUrl), capabilities);
+
             } catch (MalformedURLException e) {
                 throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
             } catch (Exception e) {
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
-        } else {
-            // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
+        } else { // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
             WebDriverManager.chromedriver().setup(); // Lädt/konfiguriert den ChromeDriver automatisch
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
