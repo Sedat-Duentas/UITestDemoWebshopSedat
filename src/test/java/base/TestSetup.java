@@ -10,7 +10,6 @@ import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import java.net.URL;
 import java.net.MalformedURLException;
-import java.time.Duration;
 
 /**
  * Basisklasse für alle UI-Tests. Kapselt die Browserinitialisierung und -beendigung.
@@ -59,7 +58,6 @@ public class TestSetup {
                 capabilities.setCapability("se:nodeRequestTimeout", 120000); // 120 Sekunden
 
                 driver = new RemoteWebDriver(new URL(seleniumGridUrl), capabilities);
-                // --- ENDE WICHTIGER ÄNDERUNG ---
             } catch (MalformedURLException e) {
                 throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
             } catch (Exception e) {
@@ -72,14 +70,11 @@ public class TestSetup {
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
         }
 
-        driver.manage().timeouts().implicitlyWait(Duration.ofSeconds(10)); // Warte bis zu 10 Sekunden auf Elementen
-
         driver.manage().window().maximize();
         driver.get(BASE_URL);
     }
 
     // Getter-Methode für JUnit Extensions wie AllureScreenshotExtension, um auf den Driver zuzugreifen.
-    // dasssss
     public WebDriver getDriver() {
         return driver;
     }

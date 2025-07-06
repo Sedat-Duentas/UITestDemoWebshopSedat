@@ -1,58 +1,73 @@
-# Definierte Stages (Phasen) deiner CI/CD-Pipeline
+# Definierte Phasen (Stages) deiner CI/CD-Pipeline. Die Stages werden in der hier definierten Reihenfolge ausgeführt.
 stages:
   - build
-  - test # Der Report Stage wird entfernt
+  - test
   - report
-
-# Job: Build-Phase (Kompilieren des Projekts)
+# -------------------------------------------
+# Job: build_job
+# Zweck: Kompiliert das Java-Projekt und stellt sicher, dass der Code fehlerfrei ist.
+# Der Job läuft in einem Docker-Container mit Maven und Java 17.
+# Er führt 'mvn clean compile' aus, um das Projekt zu bereinigen und zu kompilieren,
+# wobei die Testausführung explizit übersprungen wird (-DskipTests).
+# Die kompilierten Artefakte (das 'target'-Verzeichnis) werden für nachfolgende Jobs gespeichert.
+# -------------------------------------------
 build_job:
   stage: build
-  image: maven:3.9.6-eclipse-temurin-17-focal # Nutze ein Maven-Image mit Java 17 (oder 11, passend zu deiner pom.xml)
+  image: maven:3.9.6-eclipse-temurin-17-focal
   script:
     - echo "Building the project..."
-    - mvn clean compile -DskipTests # Kompiliert das Projekt, überspringt Tests in dieser Phase
+    - mvn clean compile -DskipTests
   artifacts:
     paths:
-      - target/ # Speichert das target-Verzeichnis als Artefakt (optional, aber nützlich)
-    expire_in: 1 day # Artefakte nach einem Tag löschen
-
-# Job: Test-Phase (Ausführen der Selenium-Tests)
+      - target/
+    expire_in: 1 day
+# -------------------------------------------
+# Job: test_job
+# Zweck: Führt die automatisierten Selenium-UI-Tests aus.
+# Dieser Job läuft ebenfalls in einem Maven/Java-Container.
+# Ein separater Docker-Container mit einem Chrome-Browser (selenium/standalone-chrome) wird als Dienst gestartet, sodass die Tests einen echten Browser verwenden können.
+# Umgebungsvariablen wie SELENIUM_REMOTE_IP und SELENIUM_PORT werden an das Test-Framework übergeben.
+# 'mvn test' führt die Tests aus; fehlgeschlagene Tests werden einmal wiederholt.
+# Die Allure-Rohdaten der Testergebnisse (target/allure-results) werden immer als Artefakte gespeichert, auch wenn der Job aufgrund von Testfehlern fehlschlägt.
+# -------------------------------------------
 test_job:
   stage: test
-  image: maven:3.9.6-eclipse-temurin-17-focal # Wieder Maven/Java Image
-  services: # Hier definieren wir die Dienste, die für den Test notwendig sind
-    - name: selenium/standalone-chrome:latest # Nutze ein vorgefertigtes Selenium Standalone Chrome Docker Image
-      alias: selenium-hub # Der Hostname, unter dem der Selenium Hub erreichbar ist
-  variables: # Umgebungsvariablen für deine TestSetup-Klasse
-    SELENIUM_REMOTE_IP: selenium-hub # IP/Hostname des Selenium Hubs (der Alias von oben)
-    SELENIUM_PORT: "4444" # Standard-Port für Selenium Grid
-    # MAVEN_CLI_OPTS und MAVEN_OPTS kannst du lassen oder entfernen, sind optional.
-    # MAVEN_CLI_OPTS: "-s .m2/settings.xml --batch-mode"
-    # MAVEN_OPTS: "-Dmaven.repo.local=.m2/repository"
+  image: maven:3.9.6-eclipse-temurin-17-focal
+  services:
+    - name: selenium/standalone-chrome:latest
+      alias: selenium-hub
+  variables:
+    SELENIUM_REMOTE_IP: selenium-hub
+    SELENIUM_PORT: "4444"
   script:
     - echo "Running Selenium tests..."
-    - mvn test -Dsurefire.rerunFailingTestsCount=1 # Führt Tests aus
+    - mvn test -Dsurefire.rerunFailingTestsCount=1
     - echo "Tests finished."
   artifacts:
     paths:
-      - target/allure-results/ # Diese Artefakte sind SEHR WICHTIG! Sie enthalten die Rohdaten für den Allure Report.
-    expire_in: 1 day # Behalte diese Artefakte für den lokalen Download
+      - target/allure-results/
+    expire_in: 1 day
     when: always
-
+# -------------------------------------------
+# Job: report_job
+# Zweck: Generiert den interaktiven Allure HTML-Report und macht ihn in GitLab direkt zugänglich.
+# Der Job installiert notwendige Tools wie 'unzip' im Container.
+# Er lädt das Allure Commandline Tool (CLI) herunter, entpackt es und fügt es zum System-PATH hinzu.
+# Anschließend verwendet er 'allure generate', um den Report aus den Testrohdaten zu erstellen.
+# Der fertige HTML-Report (target/allure-report) wird als Artefakt hochgeladen und über 'expose_as' als direkter Link in der GitLab-Benutzeroberfläche bereitgestellt.
+# Dieser Job wird immer ausgeführt, unabhängig vom Erfolg vorheriger Test-Jobs und ist von den Testartefakten des 'test_job' abhängig.
+# -------------------------------------------
 report_job:
   stage: report
   image: maven:3.9.6-eclipse-temurin-17-focal
   script:
     - echo "Generating Allure Report..."
-    # NEU: unzip installieren
-    - apt-get update -qq > /dev/null # Updates der Paketlisten leise durchführen.
-    - apt-get install -y unzip # unzip installieren
-
+    - apt-get update -qq > /dev/null
+    - apt-get install -y unzip
     - ALLURE_VERSION="2.27.0"
     - curl -o allure-commandline.zip -L https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip
     - unzip allure-commandline.zip
-    - export PATH=$PATH:$(pwd)/allure-${ALLURE_VERSION}/bin # Sicherstellen, dass ALLURE_VERSION hier auch korrekt verwendet wird
-
+    - export PATH=$PATH:$(pwd)/allure-${ALLURE_VERSION}/bin
     - allure generate target/allure-results --clean -o target/allure-report
     - echo "Allure Report generated."
   artifacts:

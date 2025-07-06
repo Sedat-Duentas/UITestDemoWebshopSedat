@@ -4,15 +4,9 @@ import base.TestSetup;
 import org.junit.jupiter.api.Test;
 import pages.HomePage;
 import pages.SearchResultsPage;
-import org.junit.jupiter.api.extension.ExtendWith;
 
 import java.util.Arrays;
 import java.util.List;
-
-import io.qameta.allure.Attachment;
-import org.junit.jupiter.api.AfterEach;
-import org.openqa.selenium.OutputType;
-import org.openqa.selenium.TakesScreenshot;
 
 import static org.junit.jupiter.api.Assertions.*;
 
