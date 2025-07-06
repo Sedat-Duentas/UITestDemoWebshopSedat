@@ -56,7 +56,7 @@ report_job:
     - echo "Allure Report generated."
   artifacts:
     paths:
-      - target/allure-results/
+      - target/allure-report/
     expose_as: 'Allure Report'
     expire_in: 1 week
   when: always
