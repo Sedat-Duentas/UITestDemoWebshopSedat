@@ -40,24 +40,23 @@ test_job:
 
 report_job:
   stage: report
-  image: maven:3.9.6-eclipse-temurin-17-focal # Dieses Image sollte passen
+  image: maven:3.9.6-eclipse-temurin-17-focal
   script:
     - echo "Generating Allure Report..."
-    # 1. Allure Commandline Tool herunterladen und entpacken
-    # Verwenden wir die gleiche Allure-Version, die auch in der pom.xml für JUnit5 definiert ist,
-    # um Konsistenz zu gewährleisten (2.27.0). Die Maven-Plugin-Version 2.22.0 war das Problemkind.
-    - ALLURE_VERSION="2.27.0" # Verwenden der Allure-Version aus allure-junit5
+    # NEU: unzip installieren
+    - apt-get update -qq > /dev/null # Updates der Paketlisten leise durchführen
+    - apt-get install -y unzip # unzip installieren
+
+    - ALLURE_VERSION="2.27.0"
     - curl -o allure-commandline.zip -L https://repo.maven.apache.org/maven2/io/qameta/allure/allure-commandline/${ALLURE_VERSION}/allure-commandline-${ALLURE_VERSION}.zip
     - unzip allure-commandline.zip
-    - export PATH=$PATH:$(pwd)/allure-2.27.0/bin # Pfad zum Allure-Executable hinzufügen
+    - export PATH=$PATH:$(pwd)/allure-${ALLURE_VERSION}/bin # Sicherstellen, dass ALLURE_VERSION hier auch korrekt verwendet wird
 
-    # 2. Allure Report generieren
-    # Hier verwenden wir das heruntergeladene Allure CLI anstatt des Maven Plugins
     - allure generate target/allure-results --clean -o target/allure-report
     - echo "Allure Report generated."
   artifacts:
     paths:
-      - target/site/allure-maven-plugin/ # Pfad zum generierten Allure Report
+      - target/site/allure-maven-plugin/
     expose_as: 'Allure Report'
     expire_in: 1 week
   when: always
