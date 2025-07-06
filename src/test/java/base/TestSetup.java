@@ -39,18 +39,7 @@ public class TestSetup {
         if (seleniumRemoteIp != null && !seleniumRemoteIp.isEmpty()) {
             // CI/CD-Umgebung: RemoteWebDriver nutzen
             options.addArguments("--headless"); // Fügt Headless-Argument nur für CI hinzu
-
-            String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
-
-            /*
-            // URL für Selenium Grid aufbauen (berücksichtigt IPv6-Adressen)
-            String seleniumGridUrl; // Hier wird ein Platzhalter für die Internet-Adresse des Browser-Servers erstellt.
-            if (seleniumRemoteIp.contains(":")) { // Prüft auf IPv6
-                seleniumGridUrl = "http://[" + seleniumRemoteIp + "]:" + seleniumPort + "/wd/hub";
-            } else { // Annahme: IPv4 oder Hostname
-                seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
-            }
-             */
+            String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub"; // URL für Selenium Grid aufbauen
 
             // RemoteWebDriver mit der konfigurierten URL initialisieren
             try {
@@ -65,7 +54,6 @@ public class TestSetup {
             } catch (MalformedURLException e) {
                 throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
             } catch (Exception e) {
-                System.err.println("CRITICAL ERROR: Failed to connect to Selenium Grid at " + seleniumGridUrl + " - " + e.getMessage());
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
         } else {
