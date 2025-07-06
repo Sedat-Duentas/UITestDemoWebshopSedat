@@ -44,7 +44,7 @@ report_job:
   script:
     - echo "Generating Allure Report..."
     # NEU: unzip installieren
-    - apt-get update -qq > /dev/null # Updates der Paketlisten leise durchführen
+    - apt-get update -qq > /dev/null # Updates der Paketlisten leise durchführen.
     - apt-get install -y unzip # unzip installieren
 
     - ALLURE_VERSION="2.27.0"
