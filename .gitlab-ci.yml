@@ -37,6 +37,7 @@ test_job:
     paths:
       - target/allure-results/ # Diese Artefakte sind SEHR WICHTIG! Sie enthalten die Rohdaten für den Allure Report.
     expire_in: 1 day # Behalte diese Artefakte für den lokalen Download
+    when: always
 
 report_job:
   stage: report
