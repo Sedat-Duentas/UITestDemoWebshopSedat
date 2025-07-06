@@ -42,6 +42,7 @@ public class TestSetup {
             options.addArguments("--headless"); // Fügt Headless-Argument nur für CI hinzu
             String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub"; // URL für Selenium Grid aufbauen
 
+            /*
             // RemoteWebDriver mit der konfigurierten URL initialisieren
             try {
                 DesiredCapabilities capabilities = new DesiredCapabilities();
@@ -58,6 +59,8 @@ public class TestSetup {
             } catch (Exception e) {
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
+             */
+
         } else { // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
             WebDriverManager.chromedriver().setup(); // Lädt/konfiguriert den ChromeDriver automatisch
             driver = new ChromeDriver(options); // Lokale Browserinstanz starten
