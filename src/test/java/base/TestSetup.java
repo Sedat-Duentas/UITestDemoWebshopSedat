@@ -40,6 +40,9 @@ public class TestSetup {
             // CI/CD-Umgebung: RemoteWebDriver nutzen
             options.addArguments("--headless"); // Fügt Headless-Argument nur für CI hinzu
 
+            String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
+
+            /*
             // URL für Selenium Grid aufbauen (berücksichtigt IPv6-Adressen)
             String seleniumGridUrl; // Hier wird ein Platzhalter für die Internet-Adresse des Browser-Servers erstellt.
             if (seleniumRemoteIp.contains(":")) { // Prüft auf IPv6
@@ -47,6 +50,7 @@ public class TestSetup {
             } else { // Annahme: IPv4 oder Hostname
                 seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
             }
+             */
 
             // RemoteWebDriver mit der konfigurierten URL initialisieren
             try {
