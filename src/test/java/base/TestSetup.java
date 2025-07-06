@@ -23,7 +23,7 @@ public class TestSetup {
     public static final String BASE_URL = "https://demowebshop.tricentis.com/";
 
     @BeforeEach // Methode wird vor jedem Test ausgeführt
-    public void setUp() {
+    public void setUp() throws MalformedURLException {
         ChromeOptions options = new ChromeOptions(); // Erstellt Browser-Optionen
         // Allgemeine Argumente für Chrome/Chromium
         options.addArguments("--disable-gpu");              // Deaktiviert GPU-Nutzung (gut für CI/Headless)
@@ -60,6 +60,8 @@ public class TestSetup {
                 throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
             }
              */
+
+            driver = new RemoteWebDriver(new URL(seleniumGridUrl), options);
 
         } else { // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
             WebDriverManager.chromedriver().setup(); // Lädt/konfiguriert den ChromeDriver automatisch
