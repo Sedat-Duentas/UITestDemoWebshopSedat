@@ -2,6 +2,7 @@
 stages:
   - build
   - test # Der Report Stage wird entfernt
+  - report
 
 # Job: Build-Phase (Kompilieren des Projekts)
 build_job:
@@ -36,3 +37,23 @@ test_job:
     paths:
       - target/allure-results/ # Diese Artefakte sind SEHR WICHTIG! Sie enthalten die Rohdaten für den Allure Report.
     expire_in: 1 day # Behalte diese Artefakte für den lokalen Download
+
+report_job:
+  stage: report
+  image: maven:3.9.6-eclipse-temurin-17-focal # Dieses Image hat Maven, was für allure:report ausreicht.
+  script:
+    - echo "Generating Allure Report..."
+    # Sicherstellen, dass das Allure Commandline Tool verfügbar ist, falls mvn allure:report nicht funktioniert.
+    # Alternativ könnten wir hier das Allure CLI manuell herunterladen und ausführen.
+    # Aber wir versuchen es zuerst mit dem Maven Plugin, da es in der pom.xml definiert ist.
+    # KEINE ${allure.maven.version} mehr, da Bash es nicht mag. Fester Wert!
+    - mvn io.qameta.allure:allure-maven:2.22.0:report
+    - echo "Allure Report generated."
+  artifacts:
+    paths:
+      - target/site/allure-maven-plugin/ # Dieser Pfad enthält den generierten HTML-Report
+    expose_as: 'Allure Report' # Macht den Link in der GitLab UI sichtbar
+    expire_in: 1 week # Den Bericht für eine Woche aufbewahren
+  when: always # Diesen Job immer ausführen, auch wenn Tests fehlschlagen
+  dependencies:
+    - test_job # Abhängigkeit vom test_job, um dessen Artefakte zu nutzen
