@@ -24,8 +24,8 @@ public class SearchFunctionTest extends TestSetup {
         // Arrange
         HomePage homePage = new HomePage(driver);
         String searchTerm = "diamond"; // Definiert den Suchbegriff, den wir im Test verwenden werden.
-        //String expectedProduct = "Black & White Diamond Heart"; // Das spezifische Produkt, das wir in den Suchergebnissen erwarten.
-        String expectedProduct = "NonExistent Diamond Product"; // Das spezifische Produkt, das wir NICHT in den Suchergebnissen erwarten.
+        String expectedProduct = "Black & White Diamond Heart"; // Das spezifische Produkt, das wir in den Suchergebnissen erwarten.
+        //String expectedProduct = "NonExistent Diamond Product"; // Das spezifische Produkt, das wir NICHT in den Suchergebnissen erwarten.
 
         // Die 'expectedSortedProducts'-Liste definiert die exakte Reihenfolge der Produkttitel, die wir als "relevant" betrachten und die am Anfang der Suchergebnisse erscheinen sollten.
         List<String> expectedSortedProducts = Arrays.asList(
