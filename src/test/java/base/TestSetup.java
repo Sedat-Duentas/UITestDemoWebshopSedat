@@ -6,7 +6,6 @@ import org.junit.jupiter.api.BeforeEach;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
-import org.openqa.selenium.remote.DesiredCapabilities;
 import org.openqa.selenium.remote.RemoteWebDriver;
 import java.net.URL;
 import java.net.MalformedURLException;
@@ -35,46 +34,21 @@ public class TestSetup {
         String seleniumRemoteIp = System.getenv("SELENIUM_REMOTE_IP");
         String seleniumPort = System.getenv("SELENIUM_PORT");
 
-        // Entscheidet, ob Tests lokal oder in CI/CD ausgeführt werden
+        // Entscheidet, ob Tests lokal oder in CI/CD ausgeführt werden. Wenn SELENIUM_REMOTE_IP gesetzt ist, wird RemoteWebDriver verwendet.
         if (seleniumRemoteIp != null && !seleniumRemoteIp.isEmpty()) {
 
-            // CI/CD-Umgebung: RemoteWebDriver nutzen
-            options.addArguments("--headless"); // Fügt Headless-Argument nur für CI hinzu
-            String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub"; // URL für Selenium Grid aufbauen
-
-            /*
-            // RemoteWebDriver mit der konfigurierten URL initialisieren
-            try {
-                DesiredCapabilities capabilities = new DesiredCapabilities();
-                capabilities.setCapability(ChromeOptions.CAPABILITY, options);
-
-                // Setzen des Session-Timeout in den Capabilities
-                capabilities.setCapability("se:sessionTimeout", 60000); // 60 Sekunden in Millisekunden
-                capabilities.setCapability("se:nodeRequestTimeout", 60000); // 120 Sekunden
-
-                driver = new RemoteWebDriver(new URL(seleniumGridUrl), capabilities);
-
-            } catch (MalformedURLException e) {
-                throw new RuntimeException("Ungültige Selenium Remote URL: " + seleniumGridUrl, e);
-            } catch (Exception e) {
-                throw new RuntimeException("Verbindung zum Selenium Grid fehlgeschlagen an URL: " + seleniumGridUrl, e);
-            }
-             */
-
+            // CI/CD-Umgebung: Konfiguriert und initialisiert den RemoteWebDriver für die CI/CD-Umgebung, wobei der Browser headless gestartet und über die aufgebaute URL mit dem Selenium Grid verbunden wird.
+            options.addArguments("--headless");
+            String seleniumGridUrl = "http://" + seleniumRemoteIp + ":" + seleniumPort + "/wd/hub";
             driver = new RemoteWebDriver(new URL(seleniumGridUrl), options);
 
-        } else { // Lokale Ausführung: Nutze WebDriverManager und lokalen ChromeDriver
-            WebDriverManager.chromedriver().setup(); // Lädt/konfiguriert den ChromeDriver automatisch
-            driver = new ChromeDriver(options); // Lokale Browserinstanz starten
+        } else { // Lokale Ausführung: Lokal wird der ChromeDriver über WebDriverManager eingerichtet und eine Browserinstanz mit den definierten Optionen gestartet.
+            WebDriverManager.chromedriver().setup();
+            driver = new ChromeDriver(options);
         }
 
         driver.manage().window().maximize();
         driver.get(BASE_URL);
-    }
-
-    // Getter-Methode für JUnit Extensions wie AllureScreenshotExtension, um auf den Driver zuzugreifen.
-    public WebDriver getDriver() {
-        return driver;
     }
 
     @AfterEach // Methode wird nach jedem Test ausgeführt
