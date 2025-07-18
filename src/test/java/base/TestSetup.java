@@ -16,7 +16,7 @@ import java.net.MalformedURLException;
  */
 public class TestSetup {
 
-    // Der WebDriver für die Browser-Steuerung.
+    // Der WebDriver für die Browser-Steuerung
     protected WebDriver driver;
     // Basis-URL der Testumgebung
     public static final String BASE_URL = "https://demowebshop.tricentis.com/";
