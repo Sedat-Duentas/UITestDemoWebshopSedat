@@ -1,6 +1,5 @@
 # UI Testautomatisierung - Tricentis Demo Web Shop (Selenium/Java)
 
-![Build Status](https://gitlab.com/sedat1990-group/uitestdemowebshopsedat.git)
 Dieses Projekt demonstriert die automatisierte UI-Testautomatisierung für den **Tricentis Demo Web Shop** (`https://demowebshop.tricentis.com/`). Es verwendet Java, Maven und eine Best-Practice-Struktur, um robuste, wartbare und skalierbare UI-Tests zu erstellen und in einer CI/CD-Pipeline auszuführen.
 
 ### **1. Projektübersicht**
@@ -20,7 +19,7 @@ Das Hauptziel dieses Projekts ist es, wichtige Benutzerinteraktionen und Funktio
 
 Das Projekt folgt einer klaren und bewährten Struktur, die die Best Practices für testautomatisierte Projekte widerspiegelt:
 
-![Projektstruktur]("C:\Users\Sedat Düntas\Desktop\Taskforce\UI-Test\JUnit\Projektstruktur.png")
+<img width="742" height="563" alt="Projektstruktur" src="https://github.com/user-attachments/assets/b3b30870-15b9-4ef6-b391-d6b972c4d027" />
 
 
 ### **4. Automatisierte Testfälle und Szenarien**
