@@ -4,7 +4,7 @@ import base.TestSetup;
 import org.junit.jupiter.api.Test;
 import pages.CategoryPage;
 import pages.HomePage;
-import pages.ProductPage; // ProductPage braucht keine ID mehr im Konstruktor
+import pages.ProductPage;
 
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
