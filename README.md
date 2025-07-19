@@ -19,8 +19,7 @@ Das Hauptziel dieses Projekts ist es, wichtige Benutzerinteraktionen und Funktio
 
 Das Projekt folgt einer klaren und bewährten Struktur, die die Best Practices für testautomatisierte Projekte widerspiegelt:
 
-<img width="742" height="563" alt="Projektstruktur" src="https://github.com/user-attachments/assets/b3b30870-15b9-4ef6-b391-d6b972c4d027" />
-
+![Projektstruktur](images/Projektstruktur.png)
 
 ### **4. Automatisierte Testfälle und Szenarien**
 
